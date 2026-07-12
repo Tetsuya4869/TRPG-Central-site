@@ -21,7 +21,7 @@ export const checkOutcomeSchema = z.enum([
 ]);
 export type CheckOutcome = z.infer<typeof checkOutcomeSchema>;
 
-export const rollSourceSchema = z.enum(["MANUAL", "AI_GM"]);
+export const rollSourceSchema = z.enum(["MANUAL", "AI_GM", "KP_ASSIST"]);
 
 export const scenarioSourceSchema = z.enum(["MANUAL", "AI_GENERATED"]);
 export type ScenarioSource = z.infer<typeof scenarioSourceSchema>;

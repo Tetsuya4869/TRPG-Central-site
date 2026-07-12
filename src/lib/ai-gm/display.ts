@@ -1,6 +1,10 @@
-// 保存済みChatMessage(Anthropic content blocks)を画面表示用に変換する。
+// 保存済みチャットメッセージ(Anthropic content blocks)を画面表示用に変換する。
 // contentJson自体はAPI返送用に無加工で保持し、表示はここで抽出する二層構造。
-import type { ChatMessage } from "@prisma/client";
+// ChatMessage / SessionChatMessage の両方を受けられるよう構造的型で受ける。
+export interface StoredChatMessage {
+  role: string;
+  contentJson: string;
+}
 
 export type DisplayMessage =
   | { kind: "user"; text: string }
@@ -13,7 +17,7 @@ interface ContentBlock {
   content?: unknown;
 }
 
-export function toDisplayMessages(messages: ChatMessage[]): DisplayMessage[] {
+export function toDisplayMessages(messages: StoredChatMessage[]): DisplayMessage[] {
   const display: DisplayMessage[] = [];
 
   for (const message of messages) {

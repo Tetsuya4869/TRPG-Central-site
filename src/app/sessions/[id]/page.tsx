@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { StatusBadge, STATUS_LABELS } from "@/components/sessions/StatusBadge";
 import { ScenarioAssetsPanel } from "@/components/scenarios/ScenarioAssetsPanel";
+import { KpAssistantPanel } from "@/components/sessions/KpAssistantPanel";
 
 interface CharacterSummary {
   id: string;
@@ -281,6 +282,9 @@ export default function SessionDetailPage({
       {session.scenario && (
         <ScenarioAssetsPanel scenarioId={session.scenario.id} readOnly />
       )}
+
+      {/* AI KP補佐 */}
+      <KpAssistantPanel sessionId={session.id} />
 
       {error && (
         <p className="rounded border border-red-800 bg-red-950/50 px-4 py-2 text-sm text-red-300">
