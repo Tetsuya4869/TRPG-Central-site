@@ -6,6 +6,7 @@ import { sessionStatusSchema } from "@/lib/coc6/types";
 const sessionUpdateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   scenarioName: z.string().max(200).optional().nullable(),
+  scenarioId: z.string().optional().nullable(),
   scheduledAt: z.string().datetime({ offset: true }).optional().nullable(),
   notes: z.string().max(20000).optional().nullable(),
   status: sessionStatusSchema.optional(),
@@ -17,7 +18,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const { id } = await params;
   const session = await prisma.gameSession.findUnique({
     where: { id },
-    include: { characters: { include: { character: true } } },
+    include: { characters: { include: { character: true } }, scenario: { select: { id: true, title: true } } },
   });
   if (!session) {
     return NextResponse.json({ error: "卓が見つかりません" }, { status: 404 });
@@ -47,13 +48,14 @@ export async function PUT(req: NextRequest, { params }: Params) {
       data: {
         ...(d.title !== undefined && { title: d.title }),
         ...(d.scenarioName !== undefined && { scenarioName: d.scenarioName }),
+        ...(d.scenarioId !== undefined && { scenarioId: d.scenarioId }),
         ...(d.scheduledAt !== undefined && {
           scheduledAt: d.scheduledAt ? new Date(d.scheduledAt) : null,
         }),
         ...(d.notes !== undefined && { notes: d.notes }),
         ...(d.status !== undefined && { status: d.status }),
       },
-      include: { characters: { include: { character: true } } },
+      include: { characters: { include: { character: true } }, scenario: { select: { id: true, title: true } } },
     });
     return NextResponse.json(session);
   } catch {

@@ -1,16 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+
+interface ScenarioSummary {
+  id: string;
+  title: string;
+}
 
 export default function NewSessionPage() {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [scenarioName, setScenarioName] = useState("");
+  const [scenarioId, setScenarioId] = useState<string | null>(null);
+  const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
   const [scheduledAt, setScheduledAt] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/scenarios")
+      .then((res) => res.json())
+      .then(setScenarios)
+      .catch(() => {});
+  }, []);
 
   async function save() {
     if (!title.trim()) {
@@ -26,6 +40,7 @@ export default function NewSessionPage() {
         body: JSON.stringify({
           title: title.trim(),
           scenarioName: scenarioName.trim() || null,
+          scenarioId,
           scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
           notes: notes.trim() || null,
         }),
@@ -66,6 +81,30 @@ export default function NewSessionPage() {
             className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 focus:border-emerald-500 focus:outline-none"
           />
         </label>
+        {scenarios.length > 0 && (
+          <label className="block text-sm space-y-1">
+            <span className="text-zinc-400">📖 ライブラリのシナリオを紐付け (任意)</span>
+            <select
+              value={scenarioId ?? ""}
+              onChange={(e) => {
+                const id = e.target.value || null;
+                setScenarioId(id);
+                if (id) {
+                  const found = scenarios.find((s) => s.id === id);
+                  if (found && !scenarioName.trim()) setScenarioName(found.title);
+                }
+              }}
+              className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 focus:border-emerald-500 focus:outline-none"
+            >
+              <option value="">紐付けない</option>
+              {scenarios.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="block text-sm space-y-1">
           <span className="text-zinc-400">開催日時</span>
           <input

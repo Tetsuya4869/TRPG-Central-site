@@ -9,6 +9,7 @@ const createSchema = z.object({
   title: z.string().min(1, "タイトルは必須です").max(200),
   scenario: z.string().min(1, "シナリオ導入は必須です").max(50000),
   characterId: z.string().min(1, "探索者を選択してください"),
+  scenarioId: z.string().optional().nullable(),
 });
 
 export async function GET() {
@@ -62,10 +63,21 @@ export async function POST(req: NextRequest) {
     maxSan: derived.maxSan,
   };
 
+  // ライブラリシナリオの紐付けは任意。存在しないIDは黙って無視する
+  let scenarioId: string | null = null;
+  if (parsed.data.scenarioId) {
+    const scenarioRef = await prisma.scenario.findUnique({
+      where: { id: parsed.data.scenarioId },
+      select: { id: true },
+    });
+    scenarioId = scenarioRef?.id ?? null;
+  }
+
   const session = await prisma.aiGmSession.create({
     data: {
       title: parsed.data.title,
       scenario: parsed.data.scenario,
+      scenarioId,
       characterId: character.id,
       stateJson: JSON.stringify(state),
     },

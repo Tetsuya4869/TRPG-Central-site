@@ -3,6 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ScenarioGeneratorPanel } from "@/components/scenarios/ScenarioGeneratorPanel";
+
+interface ScenarioSummary {
+  id: string;
+  title: string;
+  content: string;
+  summary: string | null;
+}
 
 interface AiGmSessionSummary {
   id: string;
@@ -31,25 +39,85 @@ export default function AiGmPage() {
   const [title, setTitle] = useState("");
   const [scenario, setScenario] = useState("");
   const [characterId, setCharacterId] = useState("");
+  const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
+  const [scenarioId, setScenarioId] = useState<string | null>(null);
+  const [generatedByAi, setGeneratedByAi] = useState(false);
+  const [savingToLibrary, setSavingToLibrary] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const [sRes, cRes] = await Promise.all([
+    const [sRes, cRes, scRes] = await Promise.all([
       fetch("/api/ai-gm/sessions"),
       fetch("/api/characters"),
+      fetch("/api/scenarios"),
     ]);
     const sData = await sRes.json();
     setSessions(sData.sessions);
     setApiKeyConfigured(sData.apiKeyConfigured);
     setCharacters(await cRes.json());
+    const scenarioList: ScenarioSummary[] = await scRes.json();
+    setScenarios(scenarioList);
+    // /scenarios/[id] の「このシナリオでAI GMプレイ」リンクからの遷移に対応
+    const preselect = new URLSearchParams(window.location.search).get("scenarioId");
+    if (preselect) {
+      const found = scenarioList.find((sc) => sc.id === preselect);
+      if (found) {
+        setScenarioId(found.id);
+        setScenario(found.content);
+        setTitle((prev) => prev || found.title);
+        setShowForm(true);
+      }
+    }
     setLoading(false);
   }, []);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  function selectFromLibrary(id: string) {
+    if (!id) {
+      setScenarioId(null);
+      return;
+    }
+    const found = scenarios.find((sc) => sc.id === id);
+    if (!found) return;
+    setScenarioId(found.id);
+    setScenario(found.content);
+    setGeneratedByAi(false);
+    setTitle((prev) => prev || found.title);
+  }
+
+  async function saveToLibrary() {
+    if (!scenario.trim()) return;
+    setSavingToLibrary(true);
+    setError("");
+    try {
+      const res = await fetch("/api/scenarios", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim() || "無題のシナリオ",
+          content: scenario.trim(),
+          tags: [],
+          source: generatedByAi ? "AI_GENERATED" : "MANUAL",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "ライブラリへの保存に失敗しました");
+        return;
+      }
+      setScenarioId(data.id);
+      setScenarios((prev) => [data, ...prev]);
+    } catch {
+      setError("通信エラーが発生しました");
+    } finally {
+      setSavingToLibrary(false);
+    }
+  }
 
   async function create() {
     if (!title.trim() || !scenario.trim() || !characterId) {
@@ -62,7 +130,12 @@ export default function AiGmPage() {
       const res = await fetch("/api/ai-gm/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), scenario: scenario.trim(), characterId }),
+        body: JSON.stringify({
+          title: title.trim(),
+          scenario: scenario.trim(),
+          characterId,
+          scenarioId,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -147,21 +220,67 @@ export default function AiGmPage() {
               ))}
             </select>
           </label>
+          {scenarios.length > 0 && (
+            <label className="block text-sm space-y-1">
+              <span className="text-zinc-400">📖 ライブラリから選択</span>
+              <select
+                value={scenarioId ?? ""}
+                onChange={(e) => selectFromLibrary(e.target.value)}
+                className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 focus:border-emerald-500 focus:outline-none"
+              >
+                <option value="">選択しない (下に直接入力)</option>
+                {scenarios.map((sc) => (
+                  <option key={sc.id} value={sc.id}>
+                    {sc.title}
+                    {sc.summary ? ` — ${sc.summary}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          <ScenarioGeneratorPanel
+            onGenerated={(genTitle, genContent) => {
+              setScenario(genContent);
+              setTitle((prev) => prev || genTitle);
+              setScenarioId(null);
+              setGeneratedByAi(true);
+            }}
+          />
+
           <label className="block text-sm space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-zinc-400">
                 シナリオ (導入+キーパー用の真相メモ) *
               </span>
-              <button
-                onClick={() => setScenario(SAMPLE_SCENARIO)}
-                className="text-xs text-emerald-300 hover:underline"
-              >
-                サンプルを挿入
-              </button>
+              <span className="flex gap-3">
+                {scenario.trim() && !scenarioId && (
+                  <button
+                    onClick={saveToLibrary}
+                    disabled={savingToLibrary}
+                    className="text-xs text-purple-300 hover:underline disabled:opacity-50"
+                  >
+                    {savingToLibrary ? "保存中…" : "📖 ライブラリに保存"}
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setScenario(SAMPLE_SCENARIO);
+                    setScenarioId(null);
+                    setGeneratedByAi(false);
+                  }}
+                  className="text-xs text-emerald-300 hover:underline"
+                >
+                  サンプルを挿入
+                </button>
+              </span>
             </div>
             <textarea
               value={scenario}
-              onChange={(e) => setScenario(e.target.value)}
+              onChange={(e) => {
+                setScenario(e.target.value);
+                if (scenarioId) setScenarioId(null); // 編集したらライブラリ紐付けを外す
+              }}
               rows={8}
               placeholder="シナリオの導入と、AIキーパーだけが知る真相・手がかり・結末の分岐を書いてください"
               className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 focus:border-emerald-500 focus:outline-none"

@@ -15,6 +15,7 @@ interface SessionDetail {
   id: string;
   title: string;
   scenarioName: string | null;
+  scenario: { id: string; title: string } | null;
   scheduledAt: string | null;
   notes: string | null;
   status: string;
@@ -143,7 +144,18 @@ export default function SessionDetailPage({
             <dl className="text-sm space-y-2">
               <div className="flex gap-2">
                 <dt className="text-zinc-500 w-24">シナリオ</dt>
-                <dd>{session.scenarioName ?? "未定"}</dd>
+                <dd>
+                  {session.scenario ? (
+                    <Link
+                      href={`/scenarios/${session.scenario.id}`}
+                      className="text-emerald-300 hover:underline"
+                    >
+                      📖 {session.scenarioName ?? session.scenario.title}
+                    </Link>
+                  ) : (
+                    (session.scenarioName ?? "未定")
+                  )}
+                </dd>
               </div>
               <div className="flex gap-2">
                 <dt className="text-zinc-500 w-24">開催日時</dt>

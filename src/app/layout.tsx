@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 const navItems = [
   { href: "/characters", label: "探索者" },
   { href: "/sessions", label: "卓管理" },
+  { href: "/scenarios", label: "シナリオ" },
   { href: "/dice", label: "ダイス" },
   { href: "/ai-gm", label: "AI GM" },
 ];
