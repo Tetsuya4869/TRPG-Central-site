@@ -9,7 +9,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const { id } = await params;
   const session = await prisma.aiGmSession.findUnique({
     where: { id },
-    include: { character: true, messages: { orderBy: { seq: "asc" } } },
+    include: {
+      members: { orderBy: { position: "asc" }, include: { character: true } },
+      messages: { orderBy: { seq: "asc" } },
+    },
   });
   if (!session) {
     return NextResponse.json({ error: "セッションが見つかりません" }, { status: 404 });
@@ -17,7 +20,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   const markdown = buildReplayMarkdown(
     session,
-    session.character,
+    session.members.map((m) => ({
+      character: m.character,
+      stateJson: m.stateJson,
+    })),
     toDisplayMessages(session.messages),
   );
 

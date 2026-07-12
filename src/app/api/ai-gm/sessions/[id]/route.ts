@@ -12,7 +12,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const session = await prisma.aiGmSession.findUnique({
     where: { id },
     include: {
-      character: true,
+      members: { orderBy: { position: "asc" }, include: { character: true } },
       messages: { orderBy: { seq: "asc" } },
     },
   });
@@ -24,14 +24,15 @@ export async function GET(_req: NextRequest, { params }: Params) {
     title: session.title,
     scenario: session.scenario,
     status: session.status,
-    state: JSON.parse(session.stateJson),
-    character: {
-      id: session.character.id,
-      name: session.character.name,
-      occupation: session.character.occupation,
-      imageUrl: session.character.imageUrl,
-      skillsJson: session.character.skillsJson,
-    },
+    growthApplied: Boolean(session.growthAppliedAt),
+    members: session.members.map((m) => ({
+      characterId: m.characterId,
+      name: m.character.name,
+      occupation: m.character.occupation,
+      imageUrl: m.character.imageUrl,
+      skillsJson: m.character.skillsJson,
+      state: JSON.parse(m.stateJson),
+    })),
     messages: toDisplayMessages(session.messages),
     apiKeyConfigured: hasApiKey(),
   });

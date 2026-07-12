@@ -20,28 +20,36 @@ interface GmState {
   maxSan: number;
 }
 
+interface SessionMember {
+  characterId: string;
+  name: string;
+  occupation: string | null;
+  imageUrl: string | null;
+  skillsJson: string;
+  state: GmState;
+}
+
 interface SessionDetail {
   id: string;
   title: string;
   status: string;
-  state: GmState;
-  character: {
-    id: string;
-    name: string;
-    occupation: string | null;
-    imageUrl: string | null;
-    skillsJson: string;
-  };
+  growthApplied: boolean;
+  members: SessionMember[];
   messages: DisplayMessage[];
   apiKeyConfigured: boolean;
 }
 
 function ToolCard({ data }: { data: Record<string, unknown> }) {
   const tool = data.tool as string;
+  // 対象探索者名 (複数人セッション用。旧データにはフィールドが無いので非表示)
+  const who = data.character_name ? (
+    <span className="text-zinc-400 text-xs">{String(data.character_name)}</span>
+  ) : null;
   if (tool === "request_skill_check") {
     return (
       <div className="mx-auto flex items-center gap-3 rounded-lg border border-purple-800/60 bg-purple-950/30 px-4 py-2 text-sm">
         <span>🎲</span>
+        {who}
         <span className="text-zinc-300">{String(data.skill_name)}</span>
         <span className="font-mono text-lg font-bold text-purple-300">
           {String(data.roll)}
@@ -55,6 +63,7 @@ function ToolCard({ data }: { data: Record<string, unknown> }) {
     return (
       <div className="mx-auto flex items-center gap-3 rounded-lg border border-red-800/60 bg-red-950/30 px-4 py-2 text-sm">
         <span>🧠</span>
+        {who}
         <span className="text-zinc-300">SANチェック</span>
         <span className="font-mono text-lg font-bold text-red-300">
           {String(data.roll)}
@@ -121,7 +130,9 @@ export default function AiGmPlayPage({
   const { id } = use(params);
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
-  const [state, setState] = useState<GmState | null>(null);
+  // characterId → 現在状態 (SSE stateイベントで更新)
+  const [memberStates, setMemberStates] = useState<Record<string, GmState>>({});
+  const [skillTab, setSkillTab] = useState(0);
   const [input, setInput] = useState("");
   const [streamingText, setStreamingText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -139,7 +150,9 @@ export default function AiGmPlayPage({
     const data: SessionDetail = await res.json();
     setSession(data);
     setMessages(data.messages);
-    setState(data.state);
+    setMemberStates(
+      Object.fromEntries(data.members.map((m) => [m.characterId, m.state])),
+    );
     setLoading(false);
   }, [id]);
 
@@ -212,7 +225,16 @@ export default function AiGmPlayPage({
               setMessages((prev) => [...prev, { kind: "tool", data: event.data }]);
               break;
             case "state":
-              setState(event.state);
+              // {members: [{characterId, name, state}]} 形式
+              if (Array.isArray(event.members)) {
+                setMemberStates((prev) => {
+                  const next = { ...prev };
+                  for (const m of event.members) {
+                    next[m.characterId] = m.state;
+                  }
+                  return next;
+                });
+              }
               break;
             case "error":
               flushText();
@@ -255,9 +277,10 @@ export default function AiGmPlayPage({
       </div>
     );
 
+  const skillTabMember = session.members[Math.min(skillTab, session.members.length - 1)];
   const skills: Record<string, number> = (() => {
     try {
-      return JSON.parse(session.character.skillsJson);
+      return skillTabMember ? JSON.parse(skillTabMember.skillsJson) : {};
     } catch {
       return {};
     }
@@ -271,7 +294,7 @@ export default function AiGmPlayPage({
           <div>
             <h1 className="text-xl font-bold">{session.title}</h1>
             <p className="text-xs text-zinc-500">
-              探索者: {session.character.name} / キーパー: Claude
+              探索者: {session.members.map((m) => m.name).join("、")} / キーパー: Claude
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -397,28 +420,69 @@ export default function AiGmPlayPage({
 
       {/* サイドバー */}
       <aside className="space-y-4 lg:sticky lg:top-20 self-start">
-        <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-4 space-y-3">
-          {session.character.imageUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={session.character.imageUrl}
-              alt={session.character.name}
-              className="w-full rounded-lg object-cover border border-zinc-800 max-h-48"
-            />
-          )}
-          <h2 className="text-sm font-semibold text-zinc-300">
-            {session.character.name}
-          </h2>
-          {state && (
-            <>
-              <StatBar label="HP" current={state.hp} max={state.maxHp} color="bg-red-500" />
-              <StatBar label="MP" current={state.mp} max={state.maxMp} color="bg-blue-500" />
-              <StatBar label="SAN" current={state.san} max={state.maxSan} color="bg-purple-500" />
-            </>
-          )}
-        </section>
+        {session.members.map((member) => {
+          const memberState = memberStates[member.characterId];
+          const solo = session.members.length === 1;
+          return (
+            <section
+              key={member.characterId}
+              className="rounded-lg border border-zinc-800 bg-zinc-900 p-4 space-y-3"
+            >
+              {member.imageUrl &&
+                (solo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={member.imageUrl}
+                    alt={member.name}
+                    className="w-full rounded-lg object-cover border border-zinc-800 max-h-48"
+                  />
+                ) : null)}
+              <div className="flex items-center gap-2">
+                {!solo &&
+                  (member.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={member.imageUrl}
+                      alt=""
+                      className="h-8 w-8 rounded-full object-cover border border-zinc-700"
+                    />
+                  ) : (
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-800 text-sm">
+                      👤
+                    </span>
+                  ))}
+                <h2 className="text-sm font-semibold text-zinc-300 truncate">
+                  {member.name}
+                </h2>
+              </div>
+              {memberState && (
+                <>
+                  <StatBar label="HP" current={memberState.hp} max={memberState.maxHp} color="bg-red-500" />
+                  <StatBar label="MP" current={memberState.mp} max={memberState.maxMp} color="bg-blue-500" />
+                  <StatBar label="SAN" current={memberState.san} max={memberState.maxSan} color="bg-purple-500" />
+                </>
+              )}
+            </section>
+          );
+        })}
         <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-          <h2 className="text-sm font-semibold text-zinc-300 mb-2">主な技能</h2>
+          <div className="flex items-center gap-1 mb-2 flex-wrap">
+            <h2 className="text-sm font-semibold text-zinc-300 mr-1">技能</h2>
+            {session.members.length > 1 &&
+              session.members.map((m, i) => (
+                <button
+                  key={m.characterId}
+                  onClick={() => setSkillTab(i)}
+                  className={`rounded px-2 py-0.5 text-xs border ${
+                    skillTab === i
+                      ? "border-emerald-500 bg-emerald-600/30 text-emerald-200"
+                      : "border-zinc-700 text-zinc-500 hover:border-zinc-500"
+                  }`}
+                >
+                  {m.name}
+                </button>
+              ))}
+          </div>
           <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
             {Object.entries(skills)
               .sort(([, a], [, b]) => b - a)

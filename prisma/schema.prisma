@@ -34,8 +34,8 @@ model Character {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  sessions     SessionCharacter[]
-  aiGmSessions AiGmSession[]
+  sessions        SessionCharacter[]
+  aiGmMemberships AiGmSessionMember[]
 }
 
 // 人間同士の卓。status: "RECRUITING" | "ONGOING" | "FINISHED" (SQLiteはenum非対応のためString+zod検証)
@@ -90,6 +90,9 @@ model DiceRoll {
   outcome       String?
   context       String?
   skillName     String? // request_skill_check のみ設定。成長チェックの集計に使う
+  characterId   String? // 誰のロールか (FKは張らない: キャラ削除で履歴を消さないため)
+  characterName String? // 表示・統計用スナップショット (キャラ改名/削除に耐える)
+  sanAfter      Int? // san_check時のみ。統計のSAN推移用
   source        String       @default("MANUAL")
   aiGmSessionId String?
   aiGmSession   AiGmSession? @relation(fields: [aiGmSessionId], references: [id], onDelete: Cascade)
@@ -104,16 +107,27 @@ model AiGmSession {
   scenario        String // プレイ開始時のスナップショット (ライブラリ編集の影響を受けない)
   scenarioId      String? // 出所のライブラリシナリオ (任意)
   scenarioRef     Scenario? @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
-  characterId     String
-  character       Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  stateJson       String
   status          String    @default("ONGOING")
   growthAppliedAt DateTime? // 成長チェック反映済みガード
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  members   AiGmSessionMember[]
   messages  ChatMessage[]
   diceRolls DiceRoll[]
+}
+
+// AI GMセッションの参加メンバー (1〜4人)。stateJsonはメンバー個別のAiGmState
+model AiGmSessionMember {
+  id            String      @id @default(cuid())
+  aiGmSessionId String
+  aiGmSession   AiGmSession @relation(fields: [aiGmSessionId], references: [id], onDelete: Cascade)
+  characterId   String
+  character     Character   @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  stateJson     String
+  position      Int // 表示順 0..3
+
+  @@unique([aiGmSessionId, characterId])
 }
 
 // contentJson には Anthropic API の content blocks (text / thinking / tool_use / tool_result)

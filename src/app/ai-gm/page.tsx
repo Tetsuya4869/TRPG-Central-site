@@ -17,7 +17,10 @@ interface AiGmSessionSummary {
   title: string;
   status: string;
   updatedAt: string;
-  character: { id: string; name: string; imageUrl: string | null };
+  members: {
+    id: string;
+    character: { id: string; name: string; imageUrl: string | null };
+  }[];
 }
 
 interface CharacterSummary {
@@ -38,7 +41,7 @@ export default function AiGmPage() {
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState("");
   const [scenario, setScenario] = useState("");
-  const [characterId, setCharacterId] = useState("");
+  const [characterIds, setCharacterIds] = useState<string[]>([]);
   const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
   const [scenarioId, setScenarioId] = useState<string | null>(null);
   const [generatedByAi, setGeneratedByAi] = useState(false);
@@ -120,8 +123,8 @@ export default function AiGmPage() {
   }
 
   async function create() {
-    if (!title.trim() || !scenario.trim() || !characterId) {
-      setError("タイトル・シナリオ・探索者をすべて入力してください");
+    if (!title.trim() || !scenario.trim() || characterIds.length === 0) {
+      setError("タイトル・シナリオ・探索者(1人以上)をすべて入力してください");
       return;
     }
     setBusy(true);
@@ -133,7 +136,7 @@ export default function AiGmPage() {
         body: JSON.stringify({
           title: title.trim(),
           scenario: scenario.trim(),
-          characterId,
+          characterIds,
           scenarioId,
         }),
       });
@@ -204,22 +207,51 @@ export default function AiGmPage() {
               className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 focus:border-emerald-500 focus:outline-none"
             />
           </label>
-          <label className="block text-sm space-y-1">
-            <span className="text-zinc-400">探索者 *</span>
-            <select
-              value={characterId}
-              onChange={(e) => setCharacterId(e.target.value)}
-              className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 focus:border-emerald-500 focus:outline-none"
-            >
-              <option value="">選択してください…</option>
-              {characters.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                  {c.occupation ? ` (${c.occupation})` : ""}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="text-sm space-y-1">
+            <span className="text-zinc-400">
+              参加探索者 * (1〜4人、{characterIds.length}人選択中)
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {characters.map((c) => {
+                const checked = characterIds.includes(c.id);
+                const full = !checked && characterIds.length >= 4;
+                return (
+                  <label
+                    key={c.id}
+                    className={`flex items-center gap-2 rounded border px-3 py-2 cursor-pointer ${
+                      checked
+                        ? "border-emerald-600 bg-emerald-950/30"
+                        : full
+                          ? "border-zinc-800 opacity-40 cursor-not-allowed"
+                          : "border-zinc-800 bg-zinc-950/50 hover:border-zinc-600"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={full}
+                      onChange={(e) =>
+                        setCharacterIds((prev) =>
+                          e.target.checked
+                            ? [...prev, c.id]
+                            : prev.filter((id) => id !== c.id),
+                        )
+                      }
+                      className="accent-emerald-500"
+                    />
+                    <span className="truncate">
+                      {c.name}
+                      {c.occupation && (
+                        <span className="text-zinc-500 ml-1 text-xs">
+                          {c.occupation}
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
           {scenarios.length > 0 && (
             <label className="block text-sm space-y-1">
               <span className="text-zinc-400">📖 ライブラリから選択</span>
@@ -313,18 +345,26 @@ export default function AiGmPage() {
               className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 p-4 hover:border-emerald-600 transition-colors"
             >
               <Link href={`/ai-gm/${s.id}`} className="flex flex-1 items-center gap-3">
-                {s.character.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={s.character.imageUrl}
-                    alt=""
-                    className="h-10 w-10 rounded-full object-cover border border-zinc-700 shrink-0"
-                  />
-                ) : (
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-lg">
-                    🐙
-                  </span>
-                )}
+                <span className="flex -space-x-2 shrink-0">
+                  {s.members.slice(0, 4).map((m) =>
+                    m.character.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={m.id}
+                        src={m.character.imageUrl}
+                        alt=""
+                        className="h-10 w-10 rounded-full object-cover border border-zinc-700"
+                      />
+                    ) : (
+                      <span
+                        key={m.id}
+                        className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-800 border border-zinc-700 text-lg"
+                      >
+                        🐙
+                      </span>
+                    ),
+                  )}
+                </span>
                 <span className="min-w-0">
                 <div className="flex items-center gap-3">
                   <h2 className="font-semibold">{s.title}</h2>
@@ -338,8 +378,8 @@ export default function AiGmPage() {
                     {s.status === "ONGOING" ? "進行中" : "終了"}
                   </span>
                 </div>
-                <p className="text-sm text-zinc-500 mt-1">
-                  探索者: {s.character.name}
+                <p className="text-sm text-zinc-500 mt-1 truncate">
+                  探索者: {s.members.map((m) => m.character.name).join("、")}
                 </p>
                 </span>
               </Link>

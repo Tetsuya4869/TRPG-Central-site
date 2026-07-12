@@ -44,13 +44,22 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const session = await prisma.aiGmSession.findUnique({
     where: { id },
-    include: { character: true, messages: { orderBy: { seq: "asc" } } },
+    include: {
+      members: { orderBy: { position: "asc" }, include: { character: true } },
+      messages: { orderBy: { seq: "asc" } },
+    },
   });
   if (!session) {
     return NextResponse.json({ error: "セッションが見つかりません" }, { status: 404 });
   }
   if (session.status === "FINISHED") {
     return NextResponse.json({ error: "終了したセッションです" }, { status: 400 });
+  }
+  if (session.members.length === 0) {
+    return NextResponse.json(
+      { error: "参加探索者が削除されているため、このセッションは再開できません" },
+      { status: 400 },
+    );
   }
 
   // 保存済み履歴を無加工で復元 (thinking/tool_useブロック含む)

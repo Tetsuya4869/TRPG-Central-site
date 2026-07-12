@@ -42,7 +42,12 @@ export default async function Home() {
       where: { status: "ONGOING" },
       orderBy: { updatedAt: "desc" },
       take: 3,
-      include: { character: { select: { name: true, imageUrl: true } } },
+      include: {
+        members: {
+          orderBy: { position: "asc" },
+          include: { character: { select: { name: true, imageUrl: true } } },
+        },
+      },
     }),
     prisma.character.findMany({ orderBy: { updatedAt: "desc" }, take: 4 }),
     prisma.scenario.findMany({ orderBy: { updatedAt: "desc" }, take: 4 }),
@@ -71,24 +76,32 @@ export default async function Home() {
                 href={`/ai-gm/${s.id}`}
                 className="flex items-center gap-3 rounded border border-zinc-800 bg-zinc-900 p-3 hover:border-emerald-500 transition-colors"
               >
-                {s.character.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={s.character.imageUrl}
-                    alt=""
-                    className="h-10 w-10 rounded-full object-cover border border-zinc-700"
-                  />
-                ) : (
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-800 text-lg">
-                    🐙
-                  </span>
-                )}
+                <span className="flex -space-x-2 shrink-0">
+                  {s.members.slice(0, 3).map((m) =>
+                    m.character.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={m.id}
+                        src={m.character.imageUrl}
+                        alt=""
+                        className="h-10 w-10 rounded-full object-cover border border-zinc-700"
+                      />
+                    ) : (
+                      <span
+                        key={m.id}
+                        className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-800 border border-zinc-700 text-lg"
+                      >
+                        🐙
+                      </span>
+                    ),
+                  )}
+                </span>
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold">
                     {s.title}
                   </span>
                   <span className="block truncate text-xs text-zinc-500">
-                    {s.character.name}
+                    {s.members.map((m) => m.character.name).join("、")}
                   </span>
                 </span>
               </Link>

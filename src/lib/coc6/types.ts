@@ -61,7 +61,7 @@ export const characterInputSchema = statBlockSchema.extend({
 });
 export type CharacterInput = z.infer<typeof characterInputSchema>;
 
-// AiGmSession.stateJson の中身
+// AiGmSessionMember.stateJson の中身
 export const aiGmStateSchema = z.object({
   hp: z.number().int(),
   maxHp: z.number().int(),
@@ -71,3 +71,11 @@ export const aiGmStateSchema = z.object({
   maxSan: z.number().int(),
 });
 export type AiGmState = z.infer<typeof aiGmStateSchema>;
+
+// SSE state イベントで送るメンバー別状態
+export const memberStateSchema = z.object({
+  characterId: z.string(),
+  name: z.string(),
+  state: aiGmStateSchema,
+});
+export type MemberState = z.infer<typeof memberStateSchema>;

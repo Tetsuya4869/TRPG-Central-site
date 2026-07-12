@@ -4,18 +4,53 @@ import { prisma } from "@/lib/prisma";
 import { deriveStats } from "@/lib/coc6/stats";
 import { skillsSchema, type AiGmState, type StatBlock } from "@/lib/coc6/types";
 import { hasApiKey } from "@/lib/ai-gm/client";
+import type { Character } from "@prisma/client";
 
 const createSchema = z.object({
   title: z.string().min(1, "タイトルは必須です").max(200),
   scenario: z.string().min(1, "シナリオ導入は必須です").max(50000),
-  characterId: z.string().min(1, "探索者を選択してください"),
+  characterIds: z
+    .array(z.string().min(1))
+    .min(1, "探索者を1人以上選択してください")
+    .max(4, "探索者は最大4人までです")
+    .refine((ids) => new Set(ids).size === ids.length, "探索者が重複しています"),
   scenarioId: z.string().optional().nullable(),
 });
+
+function initialState(character: Character): AiGmState {
+  const stats: StatBlock = {
+    str: character.str,
+    con: character.con,
+    pow: character.pow,
+    dex: character.dex,
+    app: character.app,
+    siz: character.siz,
+    int_: character.int_,
+    edu: character.edu,
+  };
+  const skills = skillsSchema.catch({}).parse(JSON.parse(character.skillsJson));
+  const derived = deriveStats(stats, skills["クトゥルフ神話"] ?? 0);
+  return {
+    hp: character.currentHp,
+    maxHp: derived.hp,
+    mp: character.currentMp,
+    maxMp: derived.mp,
+    san: character.currentSan,
+    maxSan: derived.maxSan,
+  };
+}
 
 export async function GET() {
   const sessions = await prisma.aiGmSession.findMany({
     orderBy: { updatedAt: "desc" },
-    include: { character: { select: { id: true, name: true, imageUrl: true } } },
+    include: {
+      members: {
+        orderBy: { position: "asc" },
+        include: {
+          character: { select: { id: true, name: true, imageUrl: true } },
+        },
+      },
+    },
   });
   return NextResponse.json({ sessions, apiKeyConfigured: hasApiKey() });
 }
@@ -34,34 +69,12 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
-  const character = await prisma.character.findUnique({
-    where: { id: parsed.data.characterId },
+  const characters = await prisma.character.findMany({
+    where: { id: { in: parsed.data.characterIds } },
   });
-  if (!character) {
+  if (characters.length !== parsed.data.characterIds.length) {
     return NextResponse.json({ error: "探索者が見つかりません" }, { status: 404 });
   }
-
-  // プレイ中の状態はマスターシートのスナップショットとして保持
-  const stats: StatBlock = {
-    str: character.str,
-    con: character.con,
-    pow: character.pow,
-    dex: character.dex,
-    app: character.app,
-    siz: character.siz,
-    int_: character.int_,
-    edu: character.edu,
-  };
-  const skills = skillsSchema.catch({}).parse(JSON.parse(character.skillsJson));
-  const derived = deriveStats(stats, skills["クトゥルフ神話"] ?? 0);
-  const state: AiGmState = {
-    hp: character.currentHp,
-    maxHp: derived.hp,
-    mp: character.currentMp,
-    maxMp: derived.mp,
-    san: character.currentSan,
-    maxSan: derived.maxSan,
-  };
 
   // ライブラリシナリオの紐付けは任意。存在しないIDは黙って無視する
   let scenarioId: string | null = null;
@@ -73,13 +86,22 @@ export async function POST(req: NextRequest) {
     scenarioId = scenarioRef?.id ?? null;
   }
 
+  // 選択順を保持してポジションを振る
+  const ordered = parsed.data.characterIds.map(
+    (id) => characters.find((c) => c.id === id)!,
+  );
   const session = await prisma.aiGmSession.create({
     data: {
       title: parsed.data.title,
       scenario: parsed.data.scenario,
       scenarioId,
-      characterId: character.id,
-      stateJson: JSON.stringify(state),
+      members: {
+        create: ordered.map((character, position) => ({
+          characterId: character.id,
+          stateJson: JSON.stringify(initialState(character)),
+          position,
+        })),
+      },
     },
   });
   return NextResponse.json(session, { status: 201 });

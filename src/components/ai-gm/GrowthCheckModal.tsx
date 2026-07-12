@@ -7,6 +7,12 @@ interface Candidate {
   currentValue: number;
 }
 
+interface MemberCandidates {
+  characterId: string;
+  name: string;
+  candidates: Candidate[];
+}
+
 interface GrowthResult {
   skillName: string;
   currentValue: number;
@@ -14,6 +20,12 @@ interface GrowthResult {
   improved: boolean;
   gain: number;
   after: number;
+}
+
+interface MemberResults {
+  characterId: string;
+  name: string;
+  results: GrowthResult[];
 }
 
 export function GrowthCheckModal({
@@ -25,9 +37,9 @@ export function GrowthCheckModal({
   onClose: () => void;
   onApplied: () => void;
 }) {
-  const [candidates, setCandidates] = useState<Candidate[] | null>(null);
+  const [members, setMembers] = useState<MemberCandidates[] | null>(null);
   const [growthApplied, setGrowthApplied] = useState(false);
-  const [results, setResults] = useState<GrowthResult[] | null>(null);
+  const [results, setResults] = useState<MemberResults[] | null>(null);
   const [applyVitals, setApplyVitals] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -40,13 +52,16 @@ export function GrowthCheckModal({
       return;
     }
     const data = await res.json();
-    setCandidates(data.candidates);
+    setMembers(data.members);
     setGrowthApplied(data.growthApplied);
   }, [sessionId]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const totalCandidates =
+    members?.reduce((sum, m) => sum + m.candidates.length, 0) ?? 0;
 
   async function runChecks() {
     setBusy(true);
@@ -60,7 +75,7 @@ export function GrowthCheckModal({
         setError(data.error ?? "経験チェックに失敗しました");
         return;
       }
-      setResults(data.results);
+      setResults(data.members);
     } catch {
       setError("通信エラーが発生しました");
     } finally {
@@ -73,14 +88,19 @@ export function GrowthCheckModal({
     setBusy(true);
     setError("");
     try {
-      const improvedSkills: Record<string, number> = {};
-      for (const r of results) {
-        if (r.improved) improvedSkills[r.skillName] = r.after;
-      }
+      const payload = {
+        members: results.map((member) => ({
+          characterId: member.characterId,
+          skills: Object.fromEntries(
+            member.results.filter((r) => r.improved).map((r) => [r.skillName, r.after]),
+          ),
+          applyVitals,
+        })),
+      };
       const res = await fetch(`/api/ai-gm/sessions/${sessionId}/growth/apply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ skills: improvedSkills, applyVitals }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -113,9 +133,9 @@ export function GrowthCheckModal({
           </p>
         )}
 
-        {candidates === null ? (
+        {members === null ? (
           <p className="text-sm text-zinc-500">読み込み中…</p>
-        ) : candidates.length === 0 ? (
+        ) : totalCandidates === 0 ? (
           <p className="text-sm text-zinc-500">
             このセッションで成功した技能判定はありませんでした。
           </p>
@@ -125,17 +145,28 @@ export function GrowthCheckModal({
               セッション中に成功した技能について経験チェックを行います。
               1d100で<strong>現在値を上回れば</strong> 1d10 成長します。
             </p>
-            <ul className="space-y-1.5">
-              {candidates.map((c) => (
-                <li
-                  key={c.skillName}
-                  className="flex justify-between rounded border border-zinc-800 bg-zinc-950/50 px-3 py-2 text-sm"
-                >
-                  <span>{c.skillName}</span>
-                  <span className="font-mono text-zinc-400">現在値 {c.currentValue}</span>
-                </li>
+            {members
+              .filter((m) => m.candidates.length > 0)
+              .map((member) => (
+                <div key={member.characterId} className="space-y-1.5">
+                  <h3 className="text-xs font-semibold text-zinc-400">
+                    {member.name}
+                  </h3>
+                  <ul className="space-y-1.5">
+                    {member.candidates.map((c) => (
+                      <li
+                        key={c.skillName}
+                        className="flex justify-between rounded border border-zinc-800 bg-zinc-950/50 px-3 py-2 text-sm"
+                      >
+                        <span>{c.skillName}</span>
+                        <span className="font-mono text-zinc-400">
+                          現在値 {c.currentValue}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
             <button
               onClick={runChecks}
               disabled={busy || growthApplied}
@@ -146,30 +177,39 @@ export function GrowthCheckModal({
           </>
         ) : (
           <>
-            <ul className="space-y-1.5">
-              {results.map((r) => (
-                <li
-                  key={r.skillName}
-                  className={`flex items-center justify-between rounded border px-3 py-2 text-sm ${
-                    r.improved
-                      ? "border-emerald-700 bg-emerald-950/30"
-                      : "border-zinc-800 bg-zinc-950/50"
-                  }`}
-                >
-                  <span>{r.skillName}</span>
-                  <span className="font-mono text-xs text-zinc-400">
-                    出目 {r.roll} / {r.currentValue}
-                  </span>
-                  {r.improved ? (
-                    <span className="font-semibold text-emerald-300">
-                      +{r.gain} → {r.after}
-                    </span>
-                  ) : (
-                    <span className="text-zinc-500">成長なし</span>
-                  )}
-                </li>
+            {results
+              .filter((m) => m.results.length > 0)
+              .map((member) => (
+                <div key={member.characterId} className="space-y-1.5">
+                  <h3 className="text-xs font-semibold text-zinc-400">
+                    {member.name}
+                  </h3>
+                  <ul className="space-y-1.5">
+                    {member.results.map((r) => (
+                      <li
+                        key={r.skillName}
+                        className={`flex items-center justify-between rounded border px-3 py-2 text-sm ${
+                          r.improved
+                            ? "border-emerald-700 bg-emerald-950/30"
+                            : "border-zinc-800 bg-zinc-950/50"
+                        }`}
+                      >
+                        <span>{r.skillName}</span>
+                        <span className="font-mono text-xs text-zinc-400">
+                          出目 {r.roll} / {r.currentValue}
+                        </span>
+                        {r.improved ? (
+                          <span className="font-semibold text-emerald-300">
+                            +{r.gain} → {r.after}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-500">成長なし</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
             {done ? (
               <p className="rounded border border-emerald-700 bg-emerald-950/40 px-4 py-2 text-sm text-emerald-200">
                 ✓ マスターシートに反映しました
@@ -183,7 +223,7 @@ export function GrowthCheckModal({
                     onChange={(e) => setApplyVitals(e.target.checked)}
                     className="accent-emerald-500"
                   />
-                  セッション終了時のHP/MP/SANもシートに反映する
+                  セッション終了時のHP/MP/SANも各シートに反映する
                 </label>
                 <button
                   onClick={apply}

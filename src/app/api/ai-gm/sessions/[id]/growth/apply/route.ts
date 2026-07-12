@@ -6,11 +6,18 @@ import { skillsSchema, aiGmStateSchema } from "@/lib/coc6/types";
 type Params = { params: Promise<{ id: string }> };
 
 const applySchema = z.object({
-  skills: skillsSchema, // 技能名 → 成長後の値
-  applyVitals: z.boolean().default(true),
+  members: z
+    .array(
+      z.object({
+        characterId: z.string().min(1),
+        skills: skillsSchema, // 技能名 → 成長後の値
+        applyVitals: z.boolean().default(true),
+      }),
+    )
+    .min(1),
 });
 
-// 成長結果とプレイ中のHP/MP/SANをマスターのキャラクターシートに反映する
+// 成長結果とプレイ中のHP/MP/SANをメンバー各自のマスターシートに反映する
 export async function POST(req: NextRequest, { params }: Params) {
   const { id } = await params;
   let body: unknown;
@@ -26,7 +33,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const session = await prisma.aiGmSession.findUnique({
     where: { id },
-    include: { character: true },
+    include: { members: { include: { character: true } } },
   });
   if (!session) {
     return NextResponse.json({ error: "セッションが見つかりません" }, { status: 404 });
@@ -38,26 +45,36 @@ export async function POST(req: NextRequest, { params }: Params) {
     );
   }
 
-  const sheetSkills = skillsSchema
-    .catch({})
-    .parse(JSON.parse(session.character.skillsJson));
-  const merged = { ...sheetSkills, ...parsed.data.skills };
+  const updates = [];
+  for (const input of parsed.data.members) {
+    const member = session.members.find((m) => m.characterId === input.characterId);
+    if (!member) continue; // メンバーでないキャラへの反映は無視
 
-  const state = aiGmStateSchema.safeParse(JSON.parse(session.stateJson));
-  const vitals =
-    parsed.data.applyVitals && state.success
-      ? {
-          currentHp: state.data.hp,
-          currentMp: state.data.mp,
-          currentSan: state.data.san,
-        }
-      : {};
+    const sheetSkills = skillsSchema
+      .catch({})
+      .parse(JSON.parse(member.character.skillsJson));
+    const merged = { ...sheetSkills, ...input.skills };
+
+    const state = aiGmStateSchema.safeParse(JSON.parse(member.stateJson));
+    const vitals =
+      input.applyVitals && state.success
+        ? {
+            currentHp: state.data.hp,
+            currentMp: state.data.mp,
+            currentSan: state.data.san,
+          }
+        : {};
+
+    updates.push(
+      prisma.character.update({
+        where: { id: member.characterId },
+        data: { skillsJson: JSON.stringify(merged), ...vitals },
+      }),
+    );
+  }
 
   await prisma.$transaction([
-    prisma.character.update({
-      where: { id: session.characterId },
-      data: { skillsJson: JSON.stringify(merged), ...vitals },
-    }),
+    ...updates,
     prisma.aiGmSession.update({
       where: { id },
       data: { growthAppliedAt: new Date() },

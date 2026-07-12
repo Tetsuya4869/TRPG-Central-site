@@ -2,11 +2,14 @@
 // assistantメッセージは finalMessage() 成功後にのみ永続化する。
 // 途中でエラーが起きた場合、直前のuser発言だけが残るため再送で復旧できる。
 import type Anthropic from "@anthropic-ai/sdk";
-import type { AiGmSession, Character } from "@prisma/client";
+import type { AiGmSession, AiGmSessionMember, Character } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { aiGmStateSchema, type AiGmState } from "@/lib/coc6/types";
+import {
+  aiGmStateSchema,
+  type MemberState,
+} from "@/lib/coc6/types";
 import { createClient, GM_MODEL } from "./client";
-import { GM_TOOLS, executeGmTool } from "./tools";
+import { GM_TOOLS, executeGmTool, type MemberContext } from "./tools";
 import { buildSystemPrompt } from "./system-prompt";
 
 const MAX_ITERATIONS = 8;
@@ -15,9 +18,13 @@ const MAX_TOKENS = 16000;
 export type SseEvent =
   | { type: "text_delta"; text: string }
   | { type: "tool"; data: Record<string, unknown> }
-  | { type: "state"; state: AiGmState }
+  | { type: "state"; members: MemberState[] }
   | { type: "done" }
   | { type: "error"; message: string };
+
+export type SessionWithMembers = AiGmSession & {
+  members: (AiGmSessionMember & { character: Character })[];
+};
 
 async function persistMessage(
   aiGmSessionId: string,
@@ -35,15 +42,36 @@ async function persistMessage(
   });
 }
 
+function toMemberStates(
+  session: SessionWithMembers,
+  contexts: MemberContext[],
+): MemberState[] {
+  return contexts.map((c) => ({
+    characterId: c.characterId,
+    name: c.name,
+    state: c.state,
+  }));
+}
+
 export async function runGmTurn(opts: {
-  session: AiGmSession & { character: Character };
+  session: SessionWithMembers;
   history: Anthropic.MessageParam[]; // 永続化済み履歴 (今回のuser発言を含む)
   nextSeq: number; // 次に保存するChatMessageのseq
   emit: (event: SseEvent) => void;
 }): Promise<void> {
   const { session, emit } = opts;
   const client = createClient();
-  let state = aiGmStateSchema.parse(JSON.parse(session.stateJson));
+
+  const sortedMembers = [...session.members].sort(
+    (a, b) => a.position - b.position,
+  );
+  const memberContexts: MemberContext[] = sortedMembers.map((m) => ({
+    memberId: m.id,
+    characterId: m.characterId,
+    name: m.character.name,
+    state: aiGmStateSchema.parse(JSON.parse(m.stateJson)),
+  }));
+
   const messages: Anthropic.MessageParam[] = [...opts.history];
   let seq = opts.nextSeq;
 
@@ -52,7 +80,13 @@ export async function runGmTurn(opts: {
     const stream = client.messages.stream({
       model: GM_MODEL,
       max_tokens: MAX_TOKENS,
-      system: buildSystemPrompt(session.character, state, session.scenario),
+      system: buildSystemPrompt(
+        sortedMembers.map((m, i) => ({
+          character: m.character,
+          state: memberContexts[i].state,
+        })),
+        session.scenario,
+      ),
       tools: GM_TOOLS,
       messages,
     });
@@ -86,21 +120,27 @@ export async function runGmTurn(opts: {
         const result = await executeGmTool(
           toolUse.name,
           toolUse.input as Record<string, unknown>,
-          { aiGmSessionId: session.id, state },
+          { aiGmSessionId: session.id, members: memberContexts },
         );
         toolResults.push({
           type: "tool_result",
           tool_use_id: toolUse.id,
           content: result.resultForModel,
+          ...(result.isError && { is_error: true }),
         });
-        emit({ type: "tool", data: result.display });
-        if (result.newState) {
-          state = result.newState;
-          await prisma.aiGmSession.update({
-            where: { id: session.id },
-            data: { stateJson: JSON.stringify(state) },
+        if (!result.isError) {
+          emit({ type: "tool", data: result.display });
+        }
+        if (result.newMemberState) {
+          const ctx = memberContexts.find(
+            (m) => m.memberId === result.newMemberState!.memberId,
+          );
+          if (ctx) ctx.state = result.newMemberState.state;
+          await prisma.aiGmSessionMember.update({
+            where: { id: result.newMemberState.memberId },
+            data: { stateJson: JSON.stringify(result.newMemberState.state) },
           });
-          emit({ type: "state", state });
+          emit({ type: "state", members: toMemberStates(session, memberContexts) });
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : "ツール実行に失敗しました";

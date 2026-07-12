@@ -5,7 +5,12 @@ import { SKILL_DEFS, skillBase } from "@/lib/coc6/skills";
 import { skillsSchema, type AiGmState, type StatBlock } from "@/lib/coc6/types";
 
 // 安定部分(全セッション共通)。cache_control でキャッシュする。
-const KEEPER_INSTRUCTIONS = `あなたはクトゥルフ神話TRPG(6版)のキーパー(ゲームマスター)です。プレイヤーと1対1のソロセッションを日本語で進行します。
+const KEEPER_INSTRUCTIONS = `あなたはクトゥルフ神話TRPG(6版)のキーパー(ゲームマスター)です。セッションを日本語で進行します。探索者が複数いる場合はパーティ全体を導き、全員に見せ場を作ってください。
+
+## 複数探索者の扱い
+- 判定・SANチェックのツール呼び出しでは、必ず character_name にシート記載の名前を一字一句正確に指定する。
+- プレイヤーの行動宣言がどの探索者のものか不明な場合は、描写を進める前に確認する。
+- 特定の探索者だけが活躍し続けないよう、各探索者の技能や背景に合った見せ場を配分する。
 
 ## 進行の原則
 - 雰囲気のある簡潔な描写(2〜4段落)で場面を伝え、最後にプレイヤーが行動を選べる状況を提示する。
@@ -67,11 +72,22 @@ ${lines.join("、")}
 ${character.memo ? `\nメモ・背景:\n${character.memo}` : ""}`;
 }
 
+export interface PromptMember {
+  character: Character;
+  state: AiGmState;
+}
+
 export function buildSystemPrompt(
-  character: Character,
-  state: AiGmState,
+  members: PromptMember[],
   scenario: string,
 ): Anthropic.TextBlockParam[] {
+  const sheets = members
+    .map((m) => formatCharacterSheet(m.character, m.state))
+    .join("\n\n");
+  const partyNote =
+    members.length > 1
+      ? `\n\n## パーティ (${members.length}人)\n参加探索者: ${members.map((m) => m.character.name).join("、")}\nツールの character_name には上記の名前を正確に使うこと。`
+      : "";
   return [
     {
       type: "text",
@@ -84,9 +100,9 @@ export function buildSystemPrompt(
       text: `# 今回のセッション
 
 ## シナリオ(キーパー用メモ。プレイヤーには段階的に開示する)
-${scenario}
+${scenario}${partyNote}
 
-${formatCharacterSheet(character, state)}`,
+${sheets}`,
       // セッション固有部分もセッション中は不変なのでキャッシュ対象
       cache_control: { type: "ephemeral" },
     },
