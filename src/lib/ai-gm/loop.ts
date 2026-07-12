@@ -9,7 +9,8 @@ import {
   type MemberState,
 } from "@/lib/coc6/types";
 import { createClient, GM_MODEL } from "./client";
-import { GM_TOOLS, executeGmTool, type MemberContext } from "./tools";
+import { buildGmTools, executeGmTool, type MemberContext } from "./tools";
+import type { Edition } from "@/lib/coc";
 import { buildSystemPrompt } from "./system-prompt";
 
 const MAX_ITERATIONS = 8;
@@ -65,6 +66,10 @@ export async function runGmTurn(opts: {
   const sortedMembers = [...session.members].sort(
     (a, b) => a.position - b.position,
   );
+  // セッションの版はメンバーの版 (作成時に混在を拒否している)
+  const edition: Edition =
+    sortedMembers[0]?.character.edition === "7" ? "7" : "6";
+  const gmTools = buildGmTools(edition);
   const memberContexts: MemberContext[] = sortedMembers.map((m) => ({
     memberId: m.id,
     characterId: m.characterId,
@@ -86,8 +91,9 @@ export async function runGmTurn(opts: {
           state: memberContexts[i].state,
         })),
         session.scenario,
+        edition,
       ),
-      tools: GM_TOOLS,
+      tools: gmTools,
       messages,
     });
 
@@ -120,7 +126,7 @@ export async function runGmTurn(opts: {
         const result = await executeGmTool(
           toolUse.name,
           toolUse.input as Record<string, unknown>,
-          { aiGmSessionId: session.id, members: memberContexts },
+          { aiGmSessionId: session.id, edition, members: memberContexts },
         );
         toolResults.push({
           type: "tool_result",

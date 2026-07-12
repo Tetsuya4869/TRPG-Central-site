@@ -3,8 +3,13 @@
 // ココフォリア側の仕様変更で取り込めなくなる可能性があるが、その場合もテキストとして
 // 貼り付けられるだけで非破壊。iconUrlはローカルパスが他者環境で解決できないため含めない。
 import type { Character } from "@prisma/client";
-import { deriveStats } from "@/lib/coc6/stats";
-import { SKILL_DEFS, skillBase } from "@/lib/coc6/skills";
+import {
+  deriveStatsFor,
+  skillDefsFor,
+  skillBaseFor,
+  effectiveSkillsFor,
+  type Edition,
+} from "@/lib/coc";
 import { skillsSchema, type StatBlock } from "@/lib/coc6/types";
 
 interface CocofoliaStatus {
@@ -43,33 +48,36 @@ export function buildCocofoliaCharacter(character: Character): CocofoliaCharacte
     edu: character.edu,
   };
   const skills = skillsSchema.catch({}).parse(JSON.parse(character.skillsJson));
-  const derived = deriveStats(stats, skills["クトゥルフ神話"] ?? 0);
+  const edition: Edition = character.edition === "7" ? "7" : "6";
+  const derived = deriveStatsFor(edition, stats, skills["クトゥルフ神話"] ?? 0);
 
-  const commands: string[] = [
-    `1d100<=${character.currentSan} 【SANチェック】`,
-    `1d100<=${derived.idea} 【アイデア】`,
-    `1d100<=${derived.luck} 【幸運】`,
-    `1d100<=${derived.knowledge} 【知識】`,
-  ];
+  // 7版はCC(1d100成功度判定)コマンド、6版は1d100<=
+  const check = (value: number, label: string) =>
+    edition === "7" ? `CC<=${value} 【${label}】` : `1d100<=${value} 【${label}】`;
+
+  const commands: string[] =
+    edition === "7"
+      ? [
+          check(character.currentSan, "SANチェック"),
+          check(character.luck ?? 0, "幸運"),
+          check(stats.int_, "アイデア"),
+          check(stats.edu, "知識"),
+        ]
+      : [
+          check(character.currentSan, "SANチェック"),
+          check(derived.idea, "アイデア"),
+          check(derived.luck, "幸運"),
+          check(derived.knowledge, "知識"),
+        ];
 
   // 割り振り済み技能(実効値) → 未割り振り定義技能(初期値) の順
-  const assigned = new Set<string>();
-  for (const def of SKILL_DEFS) {
-    if (skills[def.name] !== undefined) {
-      commands.push(`1d100<=${skills[def.name]} 【${def.name}】`);
-      assigned.add(def.name);
-    }
+  const effective = effectiveSkillsFor(edition, skills, stats);
+  for (const s of effective.filter((s) => s.assigned)) {
+    commands.push(check(s.value, s.name));
   }
-  // カスタム技能
-  for (const [name, value] of Object.entries(skills)) {
-    if (!SKILL_DEFS.some((d) => d.name === name)) {
-      commands.push(`1d100<=${value} 【${name}】`);
-      assigned.add(name);
-    }
-  }
-  for (const def of SKILL_DEFS) {
-    if (!assigned.has(def.name)) {
-      commands.push(`1d100<=${skillBase(def, stats)} 【${def.name}】`);
+  for (const def of skillDefsFor(edition)) {
+    if (skills[def.name] === undefined) {
+      commands.push(check(skillBaseFor(edition, def.name, stats) ?? 0, def.name));
     }
   }
 
@@ -81,6 +89,7 @@ export function buildCocofoliaCharacter(character: Character): CocofoliaCharacte
   }
 
   const memoParts = [
+    `CoC${edition}版`,
     character.occupation && `職業: ${character.occupation}`,
     character.age != null && `年齢: ${character.age}`,
     character.sex && `性別: ${character.sex}`,
@@ -98,6 +107,9 @@ export function buildCocofoliaCharacter(character: Character): CocofoliaCharacte
         { label: "HP", value: character.currentHp, max: derived.hp },
         { label: "MP", value: character.currentMp, max: derived.mp },
         { label: "SAN", value: character.currentSan, max: derived.maxSan },
+        ...(edition === "7"
+          ? [{ label: "幸運", value: character.luck ?? 0, max: 99 }]
+          : []),
       ],
       params: [
         { label: "STR", value: String(stats.str) },

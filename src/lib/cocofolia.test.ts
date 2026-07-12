@@ -4,6 +4,8 @@ import type { Character } from "@prisma/client";
 
 const character: Character = {
   id: "test",
+  edition: "6",
+  luck: null,
   name: "テスト太郎",
   playerName: null,
   occupation: "私立探偵",

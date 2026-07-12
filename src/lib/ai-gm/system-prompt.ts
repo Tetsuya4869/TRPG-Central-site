@@ -1,11 +1,15 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { Character } from "@prisma/client";
-import { deriveStats } from "@/lib/coc6/stats";
-import { SKILL_DEFS, skillBase } from "@/lib/coc6/skills";
+import {
+  deriveStatsFor,
+  skillDefsFor,
+  skillBaseFor,
+  type Edition,
+} from "@/lib/coc";
 import { skillsSchema, type AiGmState, type StatBlock } from "@/lib/coc6/types";
 
 // 安定部分(全セッション共通)。cache_control でキャッシュする。
-const KEEPER_INSTRUCTIONS = `あなたはクトゥルフ神話TRPG(6版)のキーパー(ゲームマスター)です。セッションを日本語で進行します。探索者が複数いる場合はパーティ全体を導き、全員に見せ場を作ってください。
+const KEEPER_INSTRUCTIONS_6 = `あなたはクトゥルフ神話TRPG(6版)のキーパー(ゲームマスター)です。セッションを日本語で進行します。探索者が複数いる場合はパーティ全体を導き、全員に見せ場を作ってください。
 
 ## 複数探索者の扱い
 - 判定・SANチェックのツール呼び出しでは、必ず character_name にシート記載の名前を一字一句正確に指定する。
@@ -32,7 +36,26 @@ const KEEPER_INSTRUCTIONS = `あなたはクトゥルフ神話TRPG(6版)のキ�
 - 地の文は普通のテキストで。NPCのセリフは「」で括る。
 - 場面の最後に、プレイヤーへの問いかけ(「どうしますか?」等)を添える。`;
 
-function formatCharacterSheet(character: Character, state: AiGmState): string {
+// 7版用: 成功度・ボーナス/ペナルティダイス・プッシュロールの運用を含む
+const KEEPER_INSTRUCTIONS_7 = KEEPER_INSTRUCTIONS_6.replace(
+  "クトゥルフ神話TRPG(6版)のキーパー",
+  "新クトゥルフ神話TRPG(7版)のキーパー",
+).replace(
+  "## 出力形式",
+  `## 7版ルールの運用
+- 判定の成功度(クリティカル/イクストリーム/ハード/レギュラー/失敗/ファンブル)を描写に反映する。イクストリームは圧倒的な成果、ハードは巧みな成果として演出する。
+- 有利な状況(奇襲、十分な準備、協力)ではbonus_dice、不利な状況(暗闇、負傷、急かされている)ではpenalty_diceを指定する。
+- 通常の判定に失敗したとき、正当な理由と代償のリスクがあればプッシュロール(再挑戦)を提案してよい。その場合 request_skill_check を再度呼び、reasonに「プッシュロール」と明記する。プッシュロールに失敗したら通常より重い代償を課す。
+- 対抗判定は両者の成功度を比較して優劣を決める。
+
+## 出力形式`,
+);
+
+function formatCharacterSheet(
+  character: Character,
+  state: AiGmState,
+  edition: Edition,
+): string {
   const stats: StatBlock = {
     str: character.str,
     con: character.con,
@@ -44,16 +67,17 @@ function formatCharacterSheet(character: Character, state: AiGmState): string {
     edu: character.edu,
   };
   const skills = skillsSchema.catch({}).parse(JSON.parse(character.skillsJson));
-  const derived = deriveStats(stats, skills["クトゥルフ神話"] ?? 0);
+  const derived = deriveStatsFor(edition, stats, skills["クトゥルフ神話"] ?? 0);
+  const defs = skillDefsFor(edition);
 
   // 全技能の実効値(割り振り済みはその値、未割り振りは初期値)
   const lines: string[] = [];
-  for (const def of SKILL_DEFS) {
-    const value = skills[def.name] ?? skillBase(def, stats);
+  for (const def of defs) {
+    const value = skills[def.name] ?? skillBaseFor(edition, def.name, stats) ?? 0;
     lines.push(`${def.name} ${value}`);
   }
   for (const [name, value] of Object.entries(skills)) {
-    if (!SKILL_DEFS.some((d) => d.name === name)) {
+    if (!defs.some((d) => d.name === name)) {
       lines.push(`${name} ${value}`);
     }
   }
@@ -63,7 +87,7 @@ function formatCharacterSheet(character: Character, state: AiGmState): string {
 職業: ${character.occupation ?? "不明"} / 年齢: ${character.age ?? "不明"} / 性別: ${character.sex ?? "不明"}
 
 能力値: STR ${stats.str} / CON ${stats.con} / POW ${stats.pow} / DEX ${stats.dex} / APP ${stats.app} / SIZ ${stats.siz} / INT ${stats.int_} / EDU ${stats.edu}
-アイデア ${derived.idea} / 幸運 ${derived.luck} / 知識 ${derived.knowledge} / ダメージボーナス ${derived.damageBonus}
+${edition === "7" ? `幸運 ${character.luck ?? 0} / ダメージボーナス ${derived.damageBonus}` : `アイデア ${derived.idea} / 幸運 ${derived.luck} / 知識 ${derived.knowledge} / ダメージボーナス ${derived.damageBonus}`}
 
 現在値: HP ${state.hp}/${state.maxHp}、MP ${state.mp}/${state.maxMp}、SAN ${state.san}/${state.maxSan}
 
@@ -80,9 +104,10 @@ export interface PromptMember {
 export function buildSystemPrompt(
   members: PromptMember[],
   scenario: string,
+  edition: Edition = "6",
 ): Anthropic.TextBlockParam[] {
   const sheets = members
-    .map((m) => formatCharacterSheet(m.character, m.state))
+    .map((m) => formatCharacterSheet(m.character, m.state, edition))
     .join("\n\n");
   const partyNote =
     members.length > 1
@@ -91,7 +116,7 @@ export function buildSystemPrompt(
   return [
     {
       type: "text",
-      text: KEEPER_INSTRUCTIONS,
+      text: edition === "7" ? KEEPER_INSTRUCTIONS_7 : KEEPER_INSTRUCTIONS_6,
       // 安定部分はプロンプトキャッシュ対象
       cache_control: { type: "ephemeral" },
     },

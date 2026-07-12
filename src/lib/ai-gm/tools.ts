@@ -4,7 +4,9 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
 import { rollDice } from "@/lib/dice";
 import { skillCheck, sanCheck } from "@/lib/coc6/check";
+import { skillCheck7 } from "@/lib/coc7/check";
 import type { AiGmState } from "@/lib/coc6/types";
+import type { Edition } from "@/lib/coc";
 
 export interface MemberContext {
   memberId: string;
@@ -15,10 +17,19 @@ export interface MemberContext {
 
 export interface GmToolContext {
   aiGmSessionId: string;
+  edition: Edition;
   members: MemberContext[];
 }
 
-export const GM_TOOLS: Anthropic.Tool[] = [
+// 版に応じたツール定義を返す。7版はボーナス/ペナルティダイスと成功度に対応。
+export function buildGmTools(edition: Edition): Anthropic.Tool[] {
+  const tools = buildBaseTools(edition);
+  return tools;
+}
+
+function buildBaseTools(edition: Edition): Anthropic.Tool[] {
+  const isV7 = edition === "7";
+  return [
   {
     name: "roll_dice",
     description:
@@ -46,7 +57,9 @@ export const GM_TOOLS: Anthropic.Tool[] = [
   {
     name: "request_skill_check",
     description:
-      "探索者の技能判定・能力値ロールを行う。プレイヤーが技能を使う行動を宣言したとき(目星で調べる、聞き耳を立てる、図書館で調べ物をする、説得を試みる等)に必ず使う。1d100をロールし、01-05クリティカル / 96-00ファンブル / 出目≦目標値で成功を自動判定する。目標値は判定する探索者のシートの技能値を使うこと。",
+      isV7
+        ? "探索者の技能判定・能力値ロールを行う。プレイヤーが技能を使う行動を宣言したときに必ず使う。1d100をロールし、7版の成功度(01クリティカル / ≦1/5イクストリーム / ≦1/2ハード / ≦目標値レギュラー / 目標値<50は96-00・≧50は00ファンブル)を自動判定する。有利/不利な状況ではbonus_dice/penalty_diceを指定する。目標値は判定する探索者のシートの技能値を使うこと。"
+        : "探索者の技能判定・能力値ロールを行う。プレイヤーが技能を使う行動を宣言したとき(目星で調べる、聞き耳を立てる、図書館で調べ物をする、説得を試みる等)に必ず使う。1d100をロールし、01-05クリティカル / 96-00ファンブル / 出目≦目標値で成功を自動判定する。目標値は判定する探索者のシートの技能値を使うこと。",
     input_schema: {
       type: "object",
       properties: {
@@ -67,6 +80,16 @@ export const GM_TOOLS: Anthropic.Tool[] = [
           type: "string",
           description: "判定の状況説明",
         },
+        ...(isV7 && {
+          bonus_dice: {
+            type: "integer",
+            description: "ボーナスダイス数 0-2 (有利な状況のとき)",
+          },
+          penalty_dice: {
+            type: "integer",
+            description: "ペナルティダイス数 0-2 (不利な状況のとき)",
+          },
+        }),
       },
       required: ["character_name", "skill_name", "target_value", "reason"],
     },
@@ -99,7 +122,8 @@ export const GM_TOOLS: Anthropic.Tool[] = [
       required: ["character_name", "loss_on_success", "loss_on_failure", "reason"],
     },
   },
-];
+  ];
+}
 
 export interface ToolExecutionResult {
   resultForModel: string; // tool_result として返すJSON文字列
@@ -184,7 +208,12 @@ export async function executeGmTool(
       const skillName = String(input.skill_name ?? "判定");
       const target = Math.max(1, Math.min(100, Number(input.target_value) || 50));
       const reason = String(input.reason ?? "");
-      const result = skillCheck(target);
+      const bonus = Math.max(0, Math.min(2, Number(input.bonus_dice) || 0));
+      const penalty = Math.max(0, Math.min(2, Number(input.penalty_dice) || 0));
+      const result =
+        ctx.edition === "7"
+          ? skillCheck7(target, bonus, penalty)
+          : skillCheck(target);
       await prisma.diceRoll.create({
         data: {
           expression: "1d100",
@@ -207,6 +236,9 @@ export async function executeGmTool(
         roll: result.roll,
         target,
         outcome: result.outcome,
+        ...(ctx.edition === "7" && (bonus > 0 || penalty > 0)
+          ? { bonus_dice: bonus, penalty_dice: penalty }
+          : {}),
         reason,
       };
       return { resultForModel: JSON.stringify(payload), display: payload };

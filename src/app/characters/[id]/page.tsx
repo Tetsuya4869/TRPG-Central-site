@@ -1,8 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { deriveStats } from "@/lib/coc6/stats";
-import { SKILL_DEFS, skillBase } from "@/lib/coc6/skills";
+import {
+  deriveStatsFor,
+  skillDefsFor,
+  skillBaseFor,
+  editionLabel,
+  SKILL_CATEGORIES,
+  type Edition,
+} from "@/lib/coc";
 import { skillsSchema, type StatBlock } from "@/lib/coc6/types";
 import { DeleteCharacterButton } from "@/components/characters/DeleteCharacterButton";
 import { DuplicateCharacterButton } from "@/components/characters/DuplicateCharacterButton";
@@ -31,7 +37,9 @@ export default async function CharacterDetailPage({
     edu: character.edu,
   };
   const skills = skillsSchema.catch({}).parse(JSON.parse(character.skillsJson));
-  const derived = deriveStats(stats, skills["クトゥルフ神話"] ?? 0);
+  const edition: Edition = character.edition === "7" ? "7" : "6";
+  const skillDefs = skillDefsFor(edition);
+  const derived = deriveStatsFor(edition, stats, skills["クトゥルフ神話"] ?? 0);
 
   const statEntries: [string, number][] = [
     ["STR", stats.str],
@@ -45,7 +53,7 @@ export default async function CharacterDetailPage({
   ];
 
   // 表示: 定義済み技能(初期値から変更されたものを強調) + カスタム技能
-  const defNames = new Set(SKILL_DEFS.map((d) => d.name));
+  const defNames = new Set(skillDefs.map((d) => d.name));
   const customSkills = Object.entries(skills).filter(([n]) => !defNames.has(n));
 
   return (
@@ -61,7 +69,18 @@ export default async function CharacterDetailPage({
             />
           )}
           <div>
-            <h1 className="text-2xl font-bold">{character.name}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold">{character.name}</h1>
+              <span
+                className={`rounded border px-2 py-0.5 text-xs font-semibold ${
+                  edition === "7"
+                    ? "bg-blue-500/20 text-blue-300 border-blue-500/50"
+                    : "bg-zinc-500/20 text-zinc-400 border-zinc-500/50"
+                }`}
+              >
+                {editionLabel(edition)}
+              </span>
+            </div>
             <p className="text-sm text-zinc-500">
               {character.occupation ?? "職業不明"}
               {character.age != null && ` / ${character.age}歳`}
@@ -129,12 +148,18 @@ export default async function CharacterDetailPage({
           ))}
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-          {[
-            ["アイデア", derived.idea],
-            ["幸運", derived.luck],
-            ["知識", derived.knowledge],
-            ["DB", derived.damageBonus],
-          ].map(([label, value]) => (
+          {(edition === "7"
+            ? ([
+                ["幸運", character.luck ?? "-"],
+                ["DB", derived.damageBonus],
+              ] as [string, number | string][])
+            : ([
+                ["アイデア", derived.idea],
+                ["幸運", derived.luck],
+                ["知識", derived.knowledge],
+                ["DB", derived.damageBonus],
+              ] as [string, number | string][])
+          ).map(([label, value]) => (
             <div
               key={label}
               className="flex justify-between rounded border border-zinc-800/60 bg-zinc-950/60 px-3 py-1.5"
@@ -148,13 +173,20 @@ export default async function CharacterDetailPage({
 
       {/* 技能 */}
       <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5 space-y-4">
-        <h2 className="font-semibold text-zinc-300">技能</h2>
-        {(["戦闘", "探索", "行動", "交渉", "知識"] as const).map((cat) => (
+        <h2 className="font-semibold text-zinc-300">
+          技能
+          {edition === "7" && (
+            <span className="ml-2 text-xs font-normal text-zinc-500">
+              (ハード=1/2、イクストリーム=1/5)
+            </span>
+          )}
+        </h2>
+        {SKILL_CATEGORIES.map((cat) => (
           <div key={cat}>
             <h3 className="text-xs text-zinc-500 mb-1.5">{cat}系</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1.5">
-              {SKILL_DEFS.filter((d) => d.category === cat).map((def) => {
-                const base = skillBase(def, stats);
+              {skillDefs.filter((d) => d.category === cat).map((def) => {
+                const base = skillBaseFor(edition, def.name, stats) ?? 0;
                 const value = skills[def.name] ?? base;
                 const modified = value !== base;
                 return (

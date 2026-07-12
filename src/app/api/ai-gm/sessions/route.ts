@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { deriveStats } from "@/lib/coc6/stats";
+import { deriveStatsFor } from "@/lib/coc";
 import { skillsSchema, type AiGmState, type StatBlock } from "@/lib/coc6/types";
 import { hasApiKey } from "@/lib/ai-gm/client";
 import type { Character } from "@prisma/client";
@@ -29,7 +29,11 @@ function initialState(character: Character): AiGmState {
     edu: character.edu,
   };
   const skills = skillsSchema.catch({}).parse(JSON.parse(character.skillsJson));
-  const derived = deriveStats(stats, skills["クトゥルフ神話"] ?? 0);
+  const derived = deriveStatsFor(
+    character.edition === "7" ? "7" : "6",
+    stats,
+    skills["クトゥルフ神話"] ?? 0,
+  );
   return {
     hp: character.currentHp,
     maxHp: derived.hp,
@@ -74,6 +78,14 @@ export async function POST(req: NextRequest) {
   });
   if (characters.length !== parsed.data.characterIds.length) {
     return NextResponse.json({ error: "探索者が見つかりません" }, { status: 404 });
+  }
+  // 判定ルールが版で異なるため、パーティは同一版のみ
+  const editions = new Set(characters.map((c) => c.edition));
+  if (editions.size > 1) {
+    return NextResponse.json(
+      { error: "6版と7版の探索者を同じセッションに混在させることはできません" },
+      { status: 400 },
+    );
   }
 
   // ライブラリシナリオの紐付けは任意。存在しないIDは黙って無視する

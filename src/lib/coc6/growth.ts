@@ -19,8 +19,9 @@ export interface GrowthCandidateRoll {
 // skillNameカラムが基本。旧データ(skillNameなし)はcontextの「技能名: 理由」形式から復元する。
 export function collectGrowthSkills(rolls: GrowthCandidateRoll[]): string[] {
   const skills = new Set<string>();
+  const SUCCESS_OUTCOMES = new Set(["SUCCESS", "HARD", "EXTREME", "CRITICAL"]);
   for (const roll of rolls) {
-    if (roll.outcome !== "SUCCESS" && roll.outcome !== "CRITICAL") continue;
+    if (!roll.outcome || !SUCCESS_OUTCOMES.has(roll.outcome)) continue;
     let name = roll.skillName;
     if (!name && roll.context) {
       const match = roll.context.match(/^(.+?): /);

@@ -12,6 +12,8 @@ export async function POST(_req: NextRequest, { params }: Params) {
   }
   const copy = await prisma.character.create({
     data: {
+      edition: character.edition,
+      luck: character.luck,
       name: `${character.name}のコピー`,
       playerName: character.playerName,
       occupation: character.occupation,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { collectGrowthSkills, growthCheck } from "@/lib/coc6/growth";
-import { SKILL_DEFS, skillBase } from "@/lib/coc6/skills";
+import { skillBaseFor } from "@/lib/coc";
 import { skillsSchema, type StatBlock } from "@/lib/coc6/types";
 import type { Character, DiceRoll } from "@prisma/client";
 
@@ -23,9 +23,10 @@ function candidatesFor(
     edu: character.edu,
   };
   const sheetSkills = skillsSchema.catch({}).parse(JSON.parse(character.skillsJson));
+  const edition = character.edition === "7" ? "7" : "6";
   return skillNames.map((skillName) => {
-    const def = SKILL_DEFS.find((d) => d.name === skillName);
-    const currentValue = sheetSkills[skillName] ?? (def ? skillBase(def, stats) : 0);
+    const currentValue =
+      sheetSkills[skillName] ?? skillBaseFor(edition, skillName, stats) ?? 0;
     return { skillName, currentValue };
   });
 }

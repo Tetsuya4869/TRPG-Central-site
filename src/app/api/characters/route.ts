@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { characterInputSchema } from "@/lib/coc6/types";
-import { deriveStats } from "@/lib/coc6/stats";
+import { deriveStatsFor, initialLuckFor } from "@/lib/coc";
 
 export async function GET() {
   const characters = await prisma.character.findMany({
@@ -25,9 +25,11 @@ export async function POST(req: NextRequest) {
     );
   }
   const d = parsed.data;
-  const derived = deriveStats(d);
+  const derived = deriveStatsFor(d.edition, d);
   const character = await prisma.character.create({
     data: {
+      edition: d.edition,
+      luck: d.luck ?? initialLuckFor(d.edition),
       name: d.name,
       playerName: d.playerName ?? null,
       occupation: d.occupation ?? null,
@@ -44,7 +46,8 @@ export async function POST(req: NextRequest) {
       edu: d.edu,
       currentHp: d.currentHp ?? derived.hp,
       currentMp: d.currentMp ?? derived.mp,
-      currentSan: d.currentSan ?? derived.san,
+      currentSan: d.currentSan ?? derived.san, // 7版は初期SAN=POW
+
       skillsJson: JSON.stringify(d.skills),
       memo: d.memo ?? null,
     },

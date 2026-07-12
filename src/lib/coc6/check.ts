@@ -57,6 +57,8 @@ export function sanCheck(
 
 export const OUTCOME_LABELS: Record<CheckOutcome, string> = {
   CRITICAL: "クリティカル!",
+  EXTREME: "イクストリーム成功!",
+  HARD: "ハード成功",
   SUCCESS: "成功",
   FAILURE: "失敗",
   FUMBLE: "ファンブル!",

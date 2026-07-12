@@ -10,7 +10,15 @@ export type SessionStatus = z.infer<typeof sessionStatusSchema>;
 export const aiGmStatusSchema = z.enum(["ONGOING", "FINISHED"]);
 export type AiGmStatus = z.infer<typeof aiGmStatusSchema>;
 
-export const checkOutcomeSchema = z.enum(["CRITICAL", "SUCCESS", "FAILURE", "FUMBLE"]);
+// EXTREME/HARD は7版の成功度 (6版判定は4値しか返さない)
+export const checkOutcomeSchema = z.enum([
+  "CRITICAL",
+  "EXTREME",
+  "HARD",
+  "SUCCESS",
+  "FAILURE",
+  "FUMBLE",
+]);
 export type CheckOutcome = z.infer<typeof checkOutcomeSchema>;
 
 export const rollSourceSchema = z.enum(["MANUAL", "AI_GM"]);
@@ -40,6 +48,8 @@ export const statBlockSchema = z.object({
 export type StatBlock = z.infer<typeof statBlockSchema>;
 
 export const characterInputSchema = statBlockSchema.extend({
+  edition: z.enum(["6", "7"]).default("6"),
+  luck: z.number().int().min(0).max(99).optional().nullable(), // 7版のみ
   name: z.string().min(1, "名前は必須です").max(100),
   playerName: z.string().max(100).optional().nullable(),
   occupation: z.string().max(100).optional().nullable(),

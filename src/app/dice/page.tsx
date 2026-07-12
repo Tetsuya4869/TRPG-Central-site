@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { OutcomeBadge } from "@/components/dice/OutcomeBadge";
-import { deriveStats } from "@/lib/coc6/stats";
-import { SKILL_DEFS, skillBase } from "@/lib/coc6/skills";
+import { deriveStatsFor, effectiveSkillsFor, type Edition } from "@/lib/coc";
 import type { StatBlock } from "@/lib/coc6/types";
 
 interface CharacterRecord {
   id: string;
   name: string;
+  edition: string;
+  luck: number | null;
   currentSan: number;
   str: number;
   con: number;
@@ -45,6 +46,8 @@ export default function DicePage() {
   const [busy, setBusy] = useState(false);
   const [characters, setCharacters] = useState<CharacterRecord[]>([]);
   const [selectedCharacterId, setSelectedCharacterId] = useState("");
+  const [checkEdition, setCheckEdition] = useState<Edition>("6");
+  const [bonusDice, setBonusDice] = useState(0); // 7版: 正=ボーナス、負=ペナルティ
 
   const fetchHistory = useCallback(async () => {
     const res = await fetch("/api/dice");
@@ -79,28 +82,32 @@ export default function DicePage() {
     } catch {
       // 壊れたJSONは無視して初期値のみで表示
     }
-    const derived = deriveStats(stats, assigned["クトゥルフ神話"] ?? 0);
-    const special = [
-      { name: "SANチェック", value: character.currentSan },
-      { name: "アイデア", value: derived.idea },
-      { name: "幸運", value: derived.luck },
-      { name: "知識", value: derived.knowledge },
-    ];
-    const skills = SKILL_DEFS.map((def) => ({
-      name: def.name,
-      value: assigned[def.name] ?? skillBase(def, stats),
-      assigned: assigned[def.name] !== undefined,
+    const charEdition: Edition = character.edition === "7" ? "7" : "6";
+    const derived = deriveStatsFor(charEdition, stats, assigned["クトゥルフ神話"] ?? 0);
+    const special =
+      charEdition === "7"
+        ? [
+            { name: "SANチェック", value: character.currentSan },
+            { name: "幸運", value: character.luck ?? 0 },
+            { name: "アイデア", value: stats.int_ },
+            { name: "知識", value: stats.edu },
+          ]
+        : [
+            { name: "SANチェック", value: character.currentSan },
+            { name: "アイデア", value: derived.idea },
+            { name: "幸運", value: derived.luck },
+            { name: "知識", value: derived.knowledge },
+          ];
+    const skills = effectiveSkillsFor(charEdition, assigned, stats).map((s) => ({
+      name: s.name,
+      value: s.value,
+      assigned: s.assigned,
     }));
-    for (const [name, value] of Object.entries(assigned)) {
-      if (!SKILL_DEFS.some((d) => d.name === name)) {
-        skills.push({ name, value, assigned: true });
-      }
-    }
     // 割り振り済みを先に、値の高い順
     skills.sort((a, b) =>
       a.assigned === b.assigned ? b.value - a.value : a.assigned ? -1 : 1,
     );
-    return { character, special, skills };
+    return { character, edition: charEdition, special, skills };
   }, [characters, selectedCharacterId]);
 
   async function roll(body: Record<string, unknown>) {
@@ -137,7 +144,13 @@ export default function DicePage() {
       setError("目標値は1〜100で入力してください");
       return;
     }
-    roll({ target: t, context: skillName || undefined });
+    roll({
+      target: t,
+      context: skillName || undefined,
+      edition: checkEdition,
+      bonus: checkEdition === "7" && bonusDice > 0 ? bonusDice : 0,
+      penalty: checkEdition === "7" && bonusDice < 0 ? -bonusDice : 0,
+    });
   }
 
   return (
@@ -181,7 +194,42 @@ export default function DicePage() {
 
           {/* 技能判定 */}
           <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5 space-y-4">
-            <h2 className="font-semibold text-zinc-300">技能判定 (1d100)</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-zinc-300">技能判定 (1d100)</h2>
+              <div className="flex gap-1">
+                {(["6", "7"] as const).map((ed) => (
+                  <button
+                    key={ed}
+                    onClick={() => setCheckEdition(ed)}
+                    className={`rounded px-2.5 py-1 text-xs font-semibold border ${
+                      checkEdition === ed
+                        ? "border-emerald-500 bg-emerald-600/30 text-emerald-200"
+                        : "border-zinc-700 text-zinc-500 hover:border-zinc-500"
+                    }`}
+                  >
+                    {ed}版
+                  </button>
+                ))}
+              </div>
+            </div>
+            {checkEdition === "7" && (
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-zinc-500">ボーナス/ペナルティ:</span>
+                {[-2, -1, 0, 1, 2].map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setBonusDice(n)}
+                    className={`rounded px-2 py-1 border font-mono ${
+                      bonusDice === n
+                        ? "border-emerald-500 bg-emerald-600/30 text-emerald-200"
+                        : "border-zinc-700 text-zinc-500 hover:border-zinc-500"
+                    }`}
+                  >
+                    {n > 0 ? `B${n}` : n < 0 ? `P${-n}` : "なし"}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex gap-2">
               <input
                 value={skillName}
@@ -206,7 +254,9 @@ export default function DicePage() {
               </button>
             </div>
             <p className="text-xs text-zinc-500">
-              01–05 クリティカル / 96–00 ファンブル / 出目≦目標値で成功
+              {checkEdition === "7"
+                ? "01クリティカル / ≦1/5イクストリーム / ≦1/2ハード / 目標値<50は96–00・≧50は00ファンブル"
+                : "01–05 クリティカル / 96–00 ファンブル / 出目≦目標値で成功"}
             </p>
           </section>
 
@@ -238,6 +288,7 @@ export default function DicePage() {
                           roll({
                             target: s.value,
                             context: `${characterChecks.character.name}/${s.name}`,
+                            edition: characterChecks.edition,
                           })
                         }
                         disabled={busy}
@@ -255,6 +306,7 @@ export default function DicePage() {
                           roll({
                             target: s.value,
                             context: `${characterChecks.character.name}/${s.name}`,
+                            edition: characterChecks.edition,
                           })
                         }
                         disabled={busy}

@@ -1,7 +1,7 @@
 // AI GMセッションのログを読み物風Markdownに変換する。
 // contentJsonの解釈はdisplay.tsのtoDisplayMessagesに一元化されているため、その出力を入力にとる。
 import type { AiGmSession, Character } from "@prisma/client";
-import { deriveStats } from "@/lib/coc6/stats";
+import { deriveStatsFor, type Edition } from "@/lib/coc";
 import { OUTCOME_LABELS } from "@/lib/coc6/check";
 import { aiGmStateSchema, type StatBlock, type CheckOutcome, type AiGmState } from "@/lib/coc6/types";
 import type { DisplayMessage } from "./display";
@@ -25,7 +25,7 @@ function formatToolLine(data: Record<string, unknown>): string {
   return `> 🎲 ${who}${data.reason ? `**${data.reason}** — ` : ""}${data.expression} → **${data.total}**`;
 }
 
-function characterSection(character: Character): string[] {
+function characterSection(character: Character, edition: Edition): string[] {
   const stats: StatBlock = {
     str: character.str,
     con: character.con,
@@ -36,7 +36,7 @@ function characterSection(character: Character): string[] {
     int_: character.int_,
     edu: character.edu,
   };
-  const derived = deriveStats(stats);
+  const derived = deriveStatsFor(edition, stats);
   return [
     `**${character.name}**${character.occupation ? ` (${character.occupation})` : ""}`,
     "",
@@ -54,17 +54,18 @@ export function buildReplayMarkdown(
   members: ReplayMember[],
   messages: DisplayMessage[],
 ): string {
+  const edition = members[0]?.character.edition === "7" ? "7" : "6";
   const lines: string[] = [
     `# ${session.title}`,
     "",
-    `クトゥルフ神話TRPG(6版) リプレイ — キーパー: Claude`,
+    `${edition === "7" ? "新クトゥルフ神話TRPG(7版)" : "クトゥルフ神話TRPG(6版)"} リプレイ — キーパー: Claude`,
     "",
     `## 探索者${members.length > 1 ? ` (${members.length}人)` : ""}`,
     "",
   ];
 
   for (const member of members) {
-    lines.push(...characterSection(member.character));
+    lines.push(...characterSection(member.character, edition));
   }
 
   lines.push(`## 本編`, "");

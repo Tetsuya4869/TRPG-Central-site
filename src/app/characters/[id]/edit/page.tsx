@@ -18,6 +18,8 @@ export default async function EditCharacterPage({
   if (!character) notFound();
 
   const initial: CharacterFormValues = {
+    edition: character.edition === "7" ? "7" : "6",
+    luck: character.luck,
     name: character.name,
     playerName: character.playerName ?? "",
     occupation: character.occupation ?? "",

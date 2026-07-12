@@ -11,12 +11,14 @@ datasource db {
 // 派生値(SAN上限/HP上限/MP上限/アイデア/幸運/知識/DB)はDBに持たず lib/coc6 で毎回計算する。
 model Character {
   id         String   @id @default(cuid())
+  edition    String   @default("6") // "6" | "7" (SQLiteはenum非対応、zod検証)
   name       String
   playerName String?
   occupation String?
   age        Int?
   sex        String?
   imageUrl   String? // 立ち絵 (/uploads/… 相対パス)
+  luck       Int? // 7版のみ: 幸運の現在値 (3d6×5)。6版はNULL (POW×5派生)
   str        Int
   con        Int
   pow        Int

@@ -3,11 +3,15 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { rollDice } from "@/lib/dice";
 import { skillCheck } from "@/lib/coc6/check";
+import { skillCheck7 } from "@/lib/coc7/check";
 
 const rollRequestSchema = z.object({
   expression: z.string().max(20).optional(),
   target: z.number().int().min(1).max(100).optional(),
   context: z.string().max(200).optional(),
+  edition: z.enum(["6", "7"]).default("6"),
+  bonus: z.number().int().min(0).max(2).default(0), // 7版ボーナスダイス
+  penalty: z.number().int().min(0).max(2).default(0), // 7版ペナルティダイス
 });
 
 export async function POST(req: NextRequest) {
@@ -21,11 +25,30 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: "リクエストが不正です" }, { status: 400 });
   }
-  const { expression, target, context } = parsed.data;
+  const { expression, target, context, edition, bonus, penalty } = parsed.data;
 
   try {
     if (target !== undefined) {
-      // 目標値付き = 技能判定 (1d100固定)
+      // 目標値付き = 技能判定 (1d100固定)。7版は成功度+ボーナス/ペナルティダイス対応
+      if (edition === "7") {
+        const result = skillCheck7(target, bonus, penalty);
+        const bpNote =
+          bonus > 0 ? ` B${bonus}` : penalty > 0 ? ` P${penalty}` : "";
+        const record = await prisma.diceRoll.create({
+          data: {
+            expression: "1d100",
+            rolls: JSON.stringify([result.roll]),
+            total: result.roll,
+            target,
+            outcome: result.outcome,
+            context: `${context ?? ""}${bpNote}`.trim() || null,
+          },
+        });
+        return NextResponse.json({
+          ...record,
+          tensCandidates: result.tensCandidates,
+        });
+      }
       const result = skillCheck(target);
       const record = await prisma.diceRoll.create({
         data: {

@@ -1,5 +1,7 @@
 const styles: Record<string, string> = {
   CRITICAL: "bg-amber-500/20 text-amber-300 border-amber-500/50",
+  EXTREME: "bg-yellow-500/20 text-yellow-200 border-yellow-500/50",
+  HARD: "bg-sky-500/20 text-sky-300 border-sky-500/50",
   SUCCESS: "bg-emerald-500/20 text-emerald-300 border-emerald-500/50",
   FAILURE: "bg-zinc-500/20 text-zinc-400 border-zinc-500/50",
   FUMBLE: "bg-red-500/20 text-red-300 border-red-500/50",
@@ -7,6 +9,8 @@ const styles: Record<string, string> = {
 
 const labels: Record<string, string> = {
   CRITICAL: "クリティカル!",
+  EXTREME: "イクストリーム!",
+  HARD: "ハード成功",
   SUCCESS: "成功",
   FAILURE: "失敗",
   FUMBLE: "ファンブル!",

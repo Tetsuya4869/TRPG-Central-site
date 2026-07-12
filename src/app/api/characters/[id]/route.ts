@@ -33,6 +33,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const character = await prisma.character.update({
       where: { id },
       data: {
+        // editionは作成後変更不可 (判定ルールが変わるため)
+        ...(d.luck !== undefined && { luck: d.luck }),
         name: d.name,
         playerName: d.playerName ?? null,
         occupation: d.occupation ?? null,

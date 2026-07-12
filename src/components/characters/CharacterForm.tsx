@@ -2,9 +2,18 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { rollDice } from "@/lib/dice";
-import { deriveStats, STAT_DICE } from "@/lib/coc6/stats";
-import { SKILL_DEFS, skillBase, spentPoints } from "@/lib/coc6/skills";
+import {
+  deriveStatsFor,
+  statDiceFor,
+  skillDefsFor,
+  skillBaseFor,
+  spentPointsFor,
+  rollStatValueFor,
+  rollStatsFor,
+  initialLuckFor,
+  SKILL_CATEGORIES,
+  type Edition,
+} from "@/lib/coc";
 import type { StatBlock, Skills } from "@/lib/coc6/types";
 
 const STAT_LABELS: Record<keyof StatBlock, string> = {
@@ -21,6 +30,8 @@ const STAT_LABELS: Record<keyof StatBlock, string> = {
 const STAT_KEYS = Object.keys(STAT_LABELS) as (keyof StatBlock)[];
 
 export interface CharacterFormValues {
+  edition: Edition;
+  luck: number | null;
   name: string;
   playerName: string;
   occupation: string;
@@ -32,7 +43,7 @@ export interface CharacterFormValues {
   memo: string;
 }
 
-const defaultStats: StatBlock = {
+const defaultStats6: StatBlock = {
   str: 10,
   con: 10,
   pow: 10,
@@ -43,6 +54,17 @@ const defaultStats: StatBlock = {
   edu: 13,
 };
 
+const defaultStats7: StatBlock = {
+  str: 50,
+  con: 50,
+  pow: 50,
+  dex: 50,
+  app: 50,
+  siz: 65,
+  int_: 65,
+  edu: 65,
+};
+
 export function CharacterForm({
   initial,
   characterId,
@@ -51,6 +73,8 @@ export function CharacterForm({
   characterId?: string; // 指定時は編集モード(PUT)
 }) {
   const router = useRouter();
+  const [edition, setEdition] = useState<Edition>(initial?.edition ?? "6");
+  const [luck, setLuck] = useState<number | null>(initial?.luck ?? null);
   const [name, setName] = useState(initial?.name ?? "");
   const [playerName, setPlayerName] = useState(initial?.playerName ?? "");
   const [occupation, setOccupation] = useState(initial?.occupation ?? "");
@@ -58,31 +82,42 @@ export function CharacterForm({
   const [sex, setSex] = useState(initial?.sex ?? "");
   const [imageUrl, setImageUrl] = useState(initial?.imageUrl ?? "");
   const [uploading, setUploading] = useState(false);
-  const [stats, setStats] = useState<StatBlock>(initial?.stats ?? defaultStats);
+  const [stats, setStats] = useState<StatBlock>(initial?.stats ?? defaultStats6);
   const [skills, setSkills] = useState<Skills>(initial?.skills ?? {});
   const [memo, setMemo] = useState(initial?.memo ?? "");
   const [customSkill, setCustomSkill] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const skillDefs = useMemo(() => skillDefsFor(edition), [edition]);
   const derived = useMemo(
-    () => deriveStats(stats, skills["クトゥルフ神話"] ?? 0),
-    [stats, skills],
+    () => deriveStatsFor(edition, stats, skills["クトゥルフ神話"] ?? 0),
+    [edition, stats, skills],
   );
-  const spent = useMemo(() => spentPoints(skills, stats), [skills, stats]);
+  const spent = useMemo(
+    () => spentPointsFor(edition, skills, stats),
+    [edition, skills, stats],
+  );
   const totalPoints = derived.occupationPoints + derived.hobbyPoints;
   const remaining = totalPoints - spent;
+  const statDice = statDiceFor(edition);
+
+  // 版切替は新規作成時のみ。技能初期値・派生値が全て変わるため割り振りはリセットする
+  function switchEdition(next: Edition) {
+    if (characterId || next === edition) return;
+    setEdition(next);
+    setStats(next === "7" ? defaultStats7 : defaultStats6);
+    setSkills({});
+    setLuck(next === "7" ? initialLuckFor("7") : null);
+  }
 
   function rollAll() {
-    const next = {} as StatBlock;
-    for (const key of STAT_KEYS) {
-      next[key] = rollDice(STAT_DICE[key]).total;
-    }
-    setStats(next);
+    setStats(rollStatsFor(edition));
+    if (edition === "7") setLuck(initialLuckFor("7"));
   }
 
   function rollOne(key: keyof StatBlock) {
-    setStats((prev) => ({ ...prev, [key]: rollDice(STAT_DICE[key]).total }));
+    setStats((prev) => ({ ...prev, [key]: rollStatValueFor(edition, key) }));
   }
 
   function setStat(key: keyof StatBlock, value: string) {
@@ -96,7 +131,7 @@ export function CharacterForm({
       const next = { ...prev };
       if (value === "" || isNaN(n) || n === base) {
         // 初期値に戻したら明示的な割り振りを消す(カスタム技能は残す)
-        if (SKILL_DEFS.some((d) => d.name === skillName)) {
+        if (skillDefs.some((d) => d.name === skillName)) {
           delete next[skillName];
           return next;
         }
@@ -141,6 +176,8 @@ export function CharacterForm({
     setBusy(true);
     setError("");
     const payload = {
+      edition,
+      luck,
       name: name.trim(),
       playerName: playerName.trim() || null,
       occupation: occupation.trim() || null,
@@ -175,11 +212,38 @@ export function CharacterForm({
   }
 
   const customSkills = Object.keys(skills).filter(
-    (n) => !SKILL_DEFS.some((d) => d.name === n),
+    (n) => !skillDefs.some((d) => d.name === n),
   );
 
   return (
     <div className="space-y-8">
+      {/* 版選択 (新規作成時のみ) */}
+      <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5 space-y-3">
+        <h2 className="font-semibold text-zinc-300">ルール版</h2>
+        {characterId ? (
+          <p className="text-sm text-zinc-400">
+            クトゥルフ神話TRPG <strong>{edition === "7" ? "7版" : "6版"}</strong>
+            <span className="text-xs text-zinc-600 ml-2">(作成後は変更できません)</span>
+          </p>
+        ) : (
+          <div className="flex gap-2">
+            {(["6", "7"] as const).map((ed) => (
+              <button
+                key={ed}
+                onClick={() => switchEdition(ed)}
+                className={`rounded px-4 py-2 text-sm font-semibold border ${
+                  edition === ed
+                    ? "border-emerald-500 bg-emerald-600/30 text-emerald-200"
+                    : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+                }`}
+              >
+                {ed}版{ed === "7" && " (×5表記・成功度)"}
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* 基本情報 */}
       <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5 space-y-4">
         <h2 className="font-semibold text-zinc-300">基本情報</h2>
@@ -291,7 +355,7 @@ export function CharacterForm({
             >
               <div className="text-xs text-zinc-500">
                 {STAT_LABELS[key]}{" "}
-                <span className="text-zinc-600">({STAT_DICE[key]})</span>
+                <span className="text-zinc-600">({statDice[key]})</span>
               </div>
               <input
                 value={stats[key] || ""}
@@ -308,17 +372,46 @@ export function CharacterForm({
             </div>
           ))}
         </div>
+        {/* 7版: 幸運 (独立ロール) */}
+        {edition === "7" && (
+          <div className="flex items-center gap-3 rounded border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm">
+            <span className="text-zinc-400">幸運 (3d6×5)</span>
+            <input
+              value={luck ?? ""}
+              onChange={(e) => {
+                const n = parseInt(e.target.value, 10);
+                setLuck(isNaN(n) ? null : Math.max(0, Math.min(99, n)));
+              }}
+              inputMode="numeric"
+              className="w-16 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-center font-bold focus:outline-none focus:border-emerald-500"
+            />
+            <button
+              onClick={() => setLuck(initialLuckFor("7"))}
+              className="text-xs text-zinc-500 hover:text-emerald-300"
+            >
+              ロール
+            </button>
+          </div>
+        )}
         {/* 派生値 */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-          {[
-            ["SAN", derived.san],
-            ["耐久力 (HP)", derived.hp],
-            ["MP", derived.mp],
-            ["アイデア", derived.idea],
-            ["幸運", derived.luck],
-            ["知識", derived.knowledge],
-            ["DB", derived.damageBonus],
-          ].map(([label, value]) => (
+          {(edition === "7"
+            ? ([
+                ["SAN (=POW)", derived.san],
+                ["耐久力 (HP)", derived.hp],
+                ["MP", derived.mp],
+                ["DB", derived.damageBonus],
+              ] as [string, number | string][])
+            : ([
+                ["SAN", derived.san],
+                ["耐久力 (HP)", derived.hp],
+                ["MP", derived.mp],
+                ["アイデア", derived.idea],
+                ["幸運", derived.luck],
+                ["知識", derived.knowledge],
+                ["DB", derived.damageBonus],
+              ] as [string, number | string][])
+          ).map(([label, value]) => (
             <div
               key={label}
               className="flex justify-between rounded border border-zinc-800/60 bg-zinc-950/60 px-3 py-1.5"
@@ -346,12 +439,12 @@ export function CharacterForm({
             </span>
           </div>
         </div>
-        {(["戦闘", "探索", "行動", "交渉", "知識"] as const).map((cat) => (
+        {SKILL_CATEGORIES.map((cat) => (
           <div key={cat}>
             <h3 className="text-xs text-zinc-500 mb-1.5">{cat}系</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1.5">
-              {SKILL_DEFS.filter((d) => d.category === cat).map((def) => {
-                const base = skillBase(def, stats);
+              {skillDefs.filter((d) => d.category === cat).map((def) => {
+                const base = skillBaseFor(edition, def.name, stats) ?? 0;
                 const value = skills[def.name] ?? base;
                 const modified = value !== base;
                 return (
