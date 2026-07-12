@@ -5,8 +5,10 @@ export async function GET() {
   const [
     characters,
     scenarios,
+    scenarioAssets,
     gameSessions,
     sessionCharacters,
+    sessionChatMessages,
     aiGmSessions,
     aiGmSessionMembers,
     chatMessages,
@@ -14,8 +16,10 @@ export async function GET() {
   ] = await Promise.all([
     prisma.character.findMany(),
     prisma.scenario.findMany(),
+    prisma.scenarioAsset.findMany(),
     prisma.gameSession.findMany(),
     prisma.sessionCharacter.findMany(),
+    prisma.sessionChatMessage.findMany(),
     prisma.aiGmSession.findMany(),
     prisma.aiGmSessionMember.findMany(),
     prisma.chatMessage.findMany(),
@@ -24,13 +28,15 @@ export async function GET() {
 
   const backup = {
     app: "trpg-central",
-    version: 1,
+    version: 2, // v2: scenarioAssets / sessionChatMessages を追加
     exportedAt: new Date().toISOString(),
     data: {
       characters,
       scenarios,
+      scenarioAssets,
       gameSessions,
       sessionCharacters,
+      sessionChatMessages,
       aiGmSessions,
       aiGmSessionMembers,
       chatMessages,

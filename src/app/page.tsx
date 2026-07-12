@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { BackupControls } from "@/components/BackupControls";
 
 export const dynamic = "force-dynamic";
 
@@ -127,15 +128,10 @@ export default async function Home() {
             <div className="text-2xl mb-2">💾</div>
             <h2 className="font-semibold text-lg mb-1">バックアップ</h2>
             <p className="text-sm text-zinc-400">
-              探索者・シナリオ・プレイログを含む全データをJSONで保存。
+              探索者・シナリオ・プレイログを含む全データをJSONで保存・復元。
             </p>
           </div>
-          <a
-            href="/api/backup"
-            className="mt-3 inline-block text-sm text-emerald-300 hover:underline"
-          >
-            ダウンロード →
-          </a>
+          <BackupControls />
         </div>
       </section>
 
