@@ -16,6 +16,7 @@ model Character {
   occupation String?
   age        Int?
   sex        String?
+  imageUrl   String? // 立ち絵 (/uploads/… 相対パス)
   str        Int
   con        Int
   pow        Int
@@ -42,6 +43,8 @@ model GameSession {
   id           String    @id @default(cuid())
   title        String
   scenarioName String?
+  scenarioId   String?
+  scenario     Scenario? @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
   scheduledAt  DateTime?
   notes        String?
   status       String    @default("RECRUITING")
@@ -49,6 +52,21 @@ model GameSession {
   updatedAt    DateTime  @updatedAt
 
   characters SessionCharacter[]
+}
+
+// シナリオライブラリ。source: "MANUAL" | "AI_GENERATED"
+model Scenario {
+  id        String   @id @default(cuid())
+  title     String
+  content   String // 導入+真相+手がかり+結末分岐の本文
+  summary   String?
+  tags      String? // カンマ区切り (SQLiteは配列非対応)
+  source    String   @default("MANUAL")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  gameSessions GameSession[]
+  aiGmSessions AiGmSession[]
 }
 
 model SessionCharacter {
@@ -71,6 +89,7 @@ model DiceRoll {
   target        Int?
   outcome       String?
   context       String?
+  skillName     String? // request_skill_check のみ設定。成長チェックの集計に使う
   source        String       @default("MANUAL")
   aiGmSessionId String?
   aiGmSession   AiGmSession? @relation(fields: [aiGmSessionId], references: [id], onDelete: Cascade)
@@ -80,15 +99,18 @@ model DiceRoll {
 // AI GMプレイセッション。stateJson はプレイ中のHP/MP/SANスナップショット
 // (マスターシートは直接更新しない)。status: "ONGOING" | "FINISHED"
 model AiGmSession {
-  id          String    @id @default(cuid())
-  title       String
-  scenario    String
-  characterId String
-  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  stateJson   String
-  status      String    @default("ONGOING")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  title           String
+  scenario        String // プレイ開始時のスナップショット (ライブラリ編集の影響を受けない)
+  scenarioId      String? // 出所のライブラリシナリオ (任意)
+  scenarioRef     Scenario? @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
+  characterId     String
+  character       Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  stateJson       String
+  status          String    @default("ONGOING")
+  growthAppliedAt DateTime? // 成長チェック反映済みガード
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   messages  ChatMessage[]
   diceRolls DiceRoll[]

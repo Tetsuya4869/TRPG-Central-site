@@ -15,6 +15,18 @@ export type CheckOutcome = z.infer<typeof checkOutcomeSchema>;
 
 export const rollSourceSchema = z.enum(["MANUAL", "AI_GM"]);
 
+export const scenarioSourceSchema = z.enum(["MANUAL", "AI_GENERATED"]);
+export type ScenarioSource = z.infer<typeof scenarioSourceSchema>;
+
+export const scenarioInputSchema = z.object({
+  title: z.string().min(1, "タイトルは必須です").max(200),
+  content: z.string().min(1, "本文は必須です").max(50000),
+  summary: z.string().max(500).optional().nullable(),
+  tags: z.array(z.string().min(1).max(30)).max(10).default([]),
+  source: scenarioSourceSchema.default("MANUAL"),
+});
+export type ScenarioInput = z.infer<typeof scenarioInputSchema>;
+
 export const statBlockSchema = z.object({
   str: z.number().int().min(1).max(99),
   con: z.number().int().min(1).max(99),
@@ -33,6 +45,13 @@ export const characterInputSchema = statBlockSchema.extend({
   occupation: z.string().max(100).optional().nullable(),
   age: z.number().int().min(1).max(999).optional().nullable(),
   sex: z.string().max(20).optional().nullable(),
+  // ローカルアップロードの相対パスのみ許可 (javascript:等の混入防止)
+  imageUrl: z
+    .string()
+    .max(300)
+    .regex(/^\/uploads\//, "画像URLが不正です")
+    .optional()
+    .nullable(),
   skills: skillsSchema.default({}),
   memo: z.string().max(10000).optional().nullable(),
   // 省略時は派生値の上限で初期化する
