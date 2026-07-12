@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// CoC 6版探索者。8能力値は固定なので正規化カラム、技能は可変なのでJSON文字列。
+// 派生値(SAN上限/HP上限/MP上限/アイデア/幸運/知識/DB)はDBに持たず lib/coc6 で毎回計算する。
+model Character {
+  id         String   @id @default(cuid())
+  name       String
+  playerName String?
+  occupation String?
+  age        Int?
+  sex        String?
+  str        Int
+  con        Int
+  pow        Int
+  dex        Int
+  app        Int
+  siz        Int
+  int_       Int      @map("int")
+  edu        Int
+  currentHp  Int
+  currentMp  Int
+  currentSan Int
+  // { "図書館": 70, "目星": 65, ... } 技能名→現在値
+  skillsJson String   @default("{}")
+  memo       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  sessions     SessionCharacter[]
+  aiGmSessions AiGmSession[]
+}
+
+// 人間同士の卓。status: "RECRUITING" | "ONGOING" | "FINISHED" (SQLiteはenum非対応のためString+zod検証)
+model GameSession {
+  id           String    @id @default(cuid())
+  title        String
+  scenarioName String?
+  scheduledAt  DateTime?
+  notes        String?
+  status       String    @default("RECRUITING")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  characters SessionCharacter[]
+}
+
+model SessionCharacter {
+  id          String      @id @default(cuid())
+  sessionId   String
+  characterId String
+  session     GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  character   Character   @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, characterId])
+}
+
+// ダイスロール履歴。source: "MANUAL" | "AI_GM"
+// outcome: "CRITICAL" | "SUCCESS" | "FAILURE" | "FUMBLE" (目標値付き判定のみ)
+model DiceRoll {
+  id            String       @id @default(cuid())
+  expression    String
+  rolls         String // 個々の出目のJSON配列 例 "[3,5,1]"
+  total         Int
+  target        Int?
+  outcome       String?
+  context       String?
+  source        String       @default("MANUAL")
+  aiGmSessionId String?
+  aiGmSession   AiGmSession? @relation(fields: [aiGmSessionId], references: [id], onDelete: Cascade)
+  createdAt     DateTime     @default(now())
+}
+
+// AI GMプレイセッション。stateJson はプレイ中のHP/MP/SANスナップショット
+// (マスターシートは直接更新しない)。status: "ONGOING" | "FINISHED"
+model AiGmSession {
+  id          String    @id @default(cuid())
+  title       String
+  scenario    String
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  stateJson   String
+  status      String    @default("ONGOING")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  messages  ChatMessage[]
+  diceRolls DiceRoll[]
+}
+
+// contentJson には Anthropic API の content blocks (text / thinking / tool_use / tool_result)
+// をそのままシリアライズして保存する。再開時に無加工で messages 配列へ復元する。
+model ChatMessage {
+  id            String      @id @default(cuid())
+  aiGmSessionId String
+  aiGmSession   AiGmSession @relation(fields: [aiGmSessionId], references: [id], onDelete: Cascade)
+  role          String // "user" | "assistant"
+  contentJson   String
+  seq           Int
+  createdAt     DateTime    @default(now())
+
+  @@unique([aiGmSessionId, seq])
+}
