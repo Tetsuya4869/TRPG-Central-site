@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { rollDice } from "@/lib/dice";
 import { deriveStats, STAT_DICE } from "@/lib/coc6/stats";
-import { SKILL_DEFS, skillBase, spentPoints, baseSkills } from "@/lib/coc6/skills";
+import { SKILL_DEFS, skillBase, spentPoints } from "@/lib/coc6/skills";
 import type { StatBlock, Skills } from "@/lib/coc6/types";
 
 const STAT_LABELS: Record<keyof StatBlock, string> = {
@@ -66,7 +66,6 @@ export function CharacterForm({
     () => deriveStats(stats, skills["クトゥルフ神話"] ?? 0),
     [stats, skills],
   );
-  const bases = useMemo(() => baseSkills(stats), [stats]);
   const spent = useMemo(() => spentPoints(skills, stats), [skills, stats]);
   const totalPoints = derived.occupationPoints + derived.hobbyPoints;
   const remaining = totalPoints - spent;

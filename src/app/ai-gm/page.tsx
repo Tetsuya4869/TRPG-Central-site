@@ -1,0 +1,225 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+
+interface AiGmSessionSummary {
+  id: string;
+  title: string;
+  status: string;
+  updatedAt: string;
+  character: { id: string; name: string };
+}
+
+interface CharacterSummary {
+  id: string;
+  name: string;
+  occupation: string | null;
+}
+
+const SAMPLE_SCENARIO = `【導入】探索者は、疎遠だった叔父の訃報を受け取る。叔父は郊外の古い屋敷で孤独死しており、遺言により屋敷は探索者に遺された。屋敷を訪れた探索者は、書斎で叔父の日記を見つける。日記の最後のページにはこう書かれていた——「地下室の扉を、決して開けてはならない」。
+
+【真相(キーパー用)】叔父は地下室に封じられた「何か」を監視し続けていた。日記や書斎の手がかり(叔父の研究ノート、奇妙な石版、古い写真)から真相に近づける。地下室の扉を開けると神話的存在との遭遇が待つ。封印をやり直す・逃げる・立ち向かうなど複数の結末を用意する。`;
+
+export default function AiGmPage() {
+  const router = useRouter();
+  const [sessions, setSessions] = useState<AiGmSessionSummary[]>([]);
+  const [characters, setCharacters] = useState<CharacterSummary[]>([]);
+  const [apiKeyConfigured, setApiKeyConfigured] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [title, setTitle] = useState("");
+  const [scenario, setScenario] = useState("");
+  const [characterId, setCharacterId] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    const [sRes, cRes] = await Promise.all([
+      fetch("/api/ai-gm/sessions"),
+      fetch("/api/characters"),
+    ]);
+    const sData = await sRes.json();
+    setSessions(sData.sessions);
+    setApiKeyConfigured(sData.apiKeyConfigured);
+    setCharacters(await cRes.json());
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function create() {
+    if (!title.trim() || !scenario.trim() || !characterId) {
+      setError("タイトル・シナリオ・探索者をすべて入力してください");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/ai-gm/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: title.trim(), scenario: scenario.trim(), characterId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "作成に失敗しました");
+        return;
+      }
+      router.push(`/ai-gm/${data.id}`);
+    } catch {
+      setError("通信エラーが発生しました");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(id: string, sessionTitle: string) {
+    if (!confirm(`「${sessionTitle}」を削除しますか? プレイログも削除されます。`)) return;
+    await fetch(`/api/ai-gm/sessions/${id}`, { method: "DELETE" });
+    await load();
+  }
+
+  if (loading) return <p className="text-zinc-500">読み込み中…</p>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">🐙 AI GMプレイ</h1>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold hover:bg-emerald-500"
+        >
+          {showForm ? "閉じる" : "+ 新しいセッション"}
+        </button>
+      </div>
+
+      {!apiKeyConfigured && (
+        <div className="rounded border border-amber-700 bg-amber-950/40 px-4 py-3 text-sm text-amber-200">
+          <p className="font-semibold mb-1">⚠️ ANTHROPIC_API_KEY が未設定です</p>
+          <p className="text-amber-300/80">
+            AI GM機能を使うには <code className="bg-zinc-900 px-1 rounded">.env</code> に
+            Anthropic APIキーを設定し、サーバーを再起動してください。
+            キーは <a href="https://console.anthropic.com/" target="_blank" rel="noreferrer" className="underline">console.anthropic.com</a> で取得できます。
+            セッションの作成・閲覧はキーなしでも可能です。
+          </p>
+        </div>
+      )}
+
+      {characters.length === 0 && (
+        <div className="rounded border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-400">
+          AI GMプレイには探索者が必要です。まず
+          <Link href="/characters/new" className="text-emerald-300 hover:underline mx-1">
+            探索者を作成
+          </Link>
+          してください。
+        </div>
+      )}
+
+      {showForm && (
+        <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5 space-y-4">
+          <h2 className="font-semibold text-zinc-300">新しいセッション</h2>
+          <label className="block text-sm space-y-1">
+            <span className="text-zinc-400">セッションタイトル *</span>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="例: 開かずの地下室"
+              className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 focus:border-emerald-500 focus:outline-none"
+            />
+          </label>
+          <label className="block text-sm space-y-1">
+            <span className="text-zinc-400">探索者 *</span>
+            <select
+              value={characterId}
+              onChange={(e) => setCharacterId(e.target.value)}
+              className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 focus:border-emerald-500 focus:outline-none"
+            >
+              <option value="">選択してください…</option>
+              {characters.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.occupation ? ` (${c.occupation})` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-sm space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-zinc-400">
+                シナリオ (導入+キーパー用の真相メモ) *
+              </span>
+              <button
+                onClick={() => setScenario(SAMPLE_SCENARIO)}
+                className="text-xs text-emerald-300 hover:underline"
+              >
+                サンプルを挿入
+              </button>
+            </div>
+            <textarea
+              value={scenario}
+              onChange={(e) => setScenario(e.target.value)}
+              rows={8}
+              placeholder="シナリオの導入と、AIキーパーだけが知る真相・手がかり・結末の分岐を書いてください"
+              className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 focus:border-emerald-500 focus:outline-none"
+            />
+          </label>
+          {error && (
+            <p className="rounded border border-red-800 bg-red-950/50 px-4 py-2 text-sm text-red-300">
+              {error}
+            </p>
+          )}
+          <button
+            onClick={create}
+            disabled={busy}
+            className="rounded bg-emerald-600 px-6 py-2 font-semibold hover:bg-emerald-500 disabled:opacity-50"
+          >
+            {busy ? "作成中…" : "セッションを開始"}
+          </button>
+        </section>
+      )}
+
+      {sessions.length === 0 ? (
+        <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-10 text-center text-zinc-500">
+          まだAI GMセッションがありません
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {sessions.map((s) => (
+            <div
+              key={s.id}
+              className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 p-4 hover:border-emerald-600 transition-colors"
+            >
+              <Link href={`/ai-gm/${s.id}`} className="flex-1">
+                <div className="flex items-center gap-3">
+                  <h2 className="font-semibold">{s.title}</h2>
+                  <span
+                    className={`rounded border px-2 py-0.5 text-xs font-semibold ${
+                      s.status === "ONGOING"
+                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50"
+                        : "bg-zinc-500/20 text-zinc-400 border-zinc-500/50"
+                    }`}
+                  >
+                    {s.status === "ONGOING" ? "進行中" : "終了"}
+                  </span>
+                </div>
+                <p className="text-sm text-zinc-500 mt-1">
+                  探索者: {s.character.name}
+                </p>
+              </Link>
+              <button
+                onClick={() => remove(s.id, s.title)}
+                className="text-xs text-zinc-600 hover:text-red-400 ml-4"
+              >
+                削除
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
