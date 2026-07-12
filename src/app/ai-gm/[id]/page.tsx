@@ -271,18 +271,28 @@ export default function AiGmPlayPage({
               探索者: {session.character.name} / キーパー: Claude
             </p>
           </div>
-          {session.status === "ONGOING" ? (
-            <button
-              onClick={finishSession}
-              className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 hover:border-zinc-500"
-            >
-              セッションを終了
-            </button>
-          ) : (
-            <span className="rounded border border-zinc-600 bg-zinc-800 px-3 py-1 text-xs text-zinc-400">
-              終了済み
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {messages.length > 0 && (
+              <a
+                href={`/api/ai-gm/sessions/${id}/replay`}
+                className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 hover:border-emerald-500 hover:text-emerald-300"
+              >
+                📄 リプレイをDL
+              </a>
+            )}
+            {session.status === "ONGOING" ? (
+              <button
+                onClick={finishSession}
+                className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 hover:border-zinc-500"
+              >
+                セッションを終了
+              </button>
+            ) : (
+              <span className="rounded border border-zinc-600 bg-zinc-800 px-3 py-1 text-xs text-zinc-400">
+                終了済み
+              </span>
+            )}
+          </div>
         </div>
 
         {!session.apiKeyConfigured && (

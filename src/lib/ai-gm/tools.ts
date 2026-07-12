@@ -122,6 +122,7 @@ export async function executeGmTool(
           target,
           outcome: result.outcome,
           context: `${skillName}: ${reason}`,
+          skillName,
           source: "AI_GM",
           aiGmSessionId: ctx.aiGmSessionId,
         },
