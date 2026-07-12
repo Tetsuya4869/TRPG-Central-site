@@ -6,11 +6,22 @@ import { useRouter } from "next/navigation";
 import { StatusBadge, STATUS_LABELS } from "@/components/sessions/StatusBadge";
 import { ScenarioAssetsPanel } from "@/components/scenarios/ScenarioAssetsPanel";
 import { KpAssistantPanel } from "@/components/sessions/KpAssistantPanel";
+import { CombatTracker, type CombatPc } from "@/components/sessions/CombatTracker";
 
 interface CharacterSummary {
   id: string;
   name: string;
   occupation: string | null;
+  edition: string;
+  currentHp: number;
+  str: number;
+  con: number;
+  pow: number;
+  dex: number;
+  app: number;
+  siz: number;
+  int_: number;
+  edu: number;
 }
 
 interface SessionDetail {
@@ -21,6 +32,7 @@ interface SessionDetail {
   scheduledAt: string | null;
   notes: string | null;
   status: string;
+  combatJson: string | null;
   characters: { id: string; character: CharacterSummary }[];
 }
 
@@ -277,6 +289,28 @@ export default function SessionDetailPage({
           )}
         </section>
       </div>
+
+      {/* 戦闘トラッカー */}
+      <CombatTracker
+        sessionId={session.id}
+        initialCombatJson={session.combatJson}
+        pcs={session.characters.map((sc): CombatPc => ({
+          characterId: sc.character.id,
+          name: sc.character.name,
+          edition: sc.character.edition,
+          currentHp: sc.character.currentHp,
+          stats: {
+            str: sc.character.str,
+            con: sc.character.con,
+            pow: sc.character.pow,
+            dex: sc.character.dex,
+            app: sc.character.app,
+            siz: sc.character.siz,
+            int_: sc.character.int_,
+            edu: sc.character.edu,
+          },
+        }))}
+      />
 
       {/* 紐付きシナリオのNPC・ハンドアウト (読み取り専用) */}
       {session.scenario && (

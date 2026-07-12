@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { sessionStatusSchema } from "@/lib/coc6/types";
+import { combatStateSchema } from "@/lib/combat";
 
 const sessionUpdateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -10,6 +11,7 @@ const sessionUpdateSchema = z.object({
   scheduledAt: z.string().datetime({ offset: true }).optional().nullable(),
   notes: z.string().max(20000).optional().nullable(),
   status: sessionStatusSchema.optional(),
+  combatJson: z.string().max(50000).optional().nullable(),
 });
 
 type Params = { params: Promise<{ id: string }> };
@@ -42,6 +44,14 @@ export async function PUT(req: NextRequest, { params }: Params) {
     );
   }
   const d = parsed.data;
+  // combatJsonは中身をスキーマ検証してから保存する
+  if (d.combatJson != null) {
+    try {
+      combatStateSchema.parse(JSON.parse(d.combatJson));
+    } catch {
+      return NextResponse.json({ error: "戦闘状態が不正です" }, { status: 400 });
+    }
+  }
   try {
     const session = await prisma.gameSession.update({
       where: { id },
@@ -54,6 +64,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         }),
         ...(d.notes !== undefined && { notes: d.notes }),
         ...(d.status !== undefined && { status: d.status }),
+        ...(d.combatJson !== undefined && { combatJson: d.combatJson }),
       },
       include: { characters: { include: { character: true } }, scenario: { select: { id: true, title: true } } },
     });
