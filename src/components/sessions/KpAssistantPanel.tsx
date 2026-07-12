@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 interface DisplayMessage {
   kind: "user" | "assistant" | "tool";
@@ -16,7 +17,15 @@ export function KpAssistantPanel({ sessionId }: { sessionId: string }) {
   const [streamingText, setStreamingText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [confirmClear, setConfirmClear] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // 進行中ストリームの中断用 (再送信時・アンマウント時にabort)
+  const abortRef = useRef<AbortController | null>(null);
+
+  // アンマウント時にストリームを中断
+  useEffect(() => {
+    return () => abortRef.current?.abort();
+  }, []);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/sessions/${sessionId}/assistant`);
@@ -42,34 +51,46 @@ export function KpAssistantPanel({ sessionId }: { sessionId: string }) {
     setError("");
     setMessages((prev) => [...prev, { kind: "user", text: message }]);
 
+    // 前のストリームが残っていれば中断してから新しいコントローラを用意
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    // 受信済みテキストをメッセージリストへ確定する。
+    // tryの外に置くことで、切断時(catch)にも部分応答を保全できる。
+    let currentText = "";
+    const flushText = () => {
+      if (currentText) {
+        const finished = currentText;
+        setMessages((prev) => [...prev, { kind: "assistant", text: finished }]);
+        currentText = "";
+        setStreamingText("");
+      }
+    };
+
     try {
       const res = await fetch(`/api/sessions/${sessionId}/assistant/message`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message }),
+        signal: controller.signal,
       });
       if (!res.ok || !res.body) {
         const data = await res.json().catch(() => ({}));
         setError(data.error ?? "送信に失敗しました");
+        // 楽観追加したユーザー発言を差し戻し、本文を入力欄に復元する
+        setMessages((prev) => prev.slice(0, -1));
+        setInput(message);
         return;
       }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      let currentText = "";
-      const flushText = () => {
-        if (currentText) {
-          const finished = currentText;
-          setMessages((prev) => [...prev, { kind: "assistant", text: finished }]);
-          currentText = "";
-          setStreamingText("");
-        }
-      };
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n\n");
+        const parts = buffer.split(/\r?\n\r?\n/);
         buffer = parts.pop() ?? "";
         for (const part of parts) {
           const line = part.trim();
@@ -100,8 +121,13 @@ export function KpAssistantPanel({ sessionId }: { sessionId: string }) {
         }
       }
       flushText();
-    } catch {
-      setError("通信エラーが発生しました");
+    } catch (err) {
+      // 切断時も受信済みの部分応答をメッセージリストに保全する
+      flushText();
+      // 意図的な中断(abort)はエラー表示しない
+      if (!(err instanceof DOMException && err.name === "AbortError")) {
+        setError("通信エラーが発生しました");
+      }
     } finally {
       setStreamingText("");
       setBusy(false);
@@ -109,7 +135,7 @@ export function KpAssistantPanel({ sessionId }: { sessionId: string }) {
   }
 
   async function clearHistory() {
-    if (!confirm("相談履歴をクリアしますか?")) return;
+    setConfirmClear(false);
     await fetch(`/api/sessions/${sessionId}/assistant`, { method: "DELETE" });
     setMessages([]);
   }
@@ -121,7 +147,7 @@ export function KpAssistantPanel({ sessionId }: { sessionId: string }) {
         <div className="flex gap-3">
           {open && messages.length > 0 && (
             <button
-              onClick={clearHistory}
+              onClick={() => setConfirmClear(true)}
               className="text-xs text-zinc-600 hover:text-red-400"
             >
               履歴クリア
@@ -146,7 +172,10 @@ export function KpAssistantPanel({ sessionId }: { sessionId: string }) {
               ⚠️ ANTHROPIC_API_KEY が未設定のため利用できません
             </p>
           )}
-          <div className="max-h-80 overflow-y-auto rounded border border-zinc-800 bg-zinc-950/70 p-3 space-y-3">
+          <div
+            aria-live="polite"
+            className="max-h-80 overflow-y-auto rounded border border-zinc-800 bg-zinc-950/70 p-3 space-y-3"
+          >
             {messages.length === 0 && !streamingText && (
               <p className="text-center text-xs text-zinc-600 py-4">
                 例: 「古書店主のセリフを3案ください」「回避と応急手当、どちらを先に処理すべき?」
@@ -227,6 +256,17 @@ export function KpAssistantPanel({ sessionId }: { sessionId: string }) {
           </div>
         </>
       )}
+
+      {/* 履歴クリアの確認ダイアログ */}
+      <ConfirmDialog
+        open={confirmClear}
+        title="相談履歴をクリアしますか?"
+        message="この操作は取り消せません。"
+        confirmLabel="クリアする"
+        danger
+        onConfirm={clearHistory}
+        onCancel={() => setConfirmClear(false)}
+      />
     </section>
   );
 }

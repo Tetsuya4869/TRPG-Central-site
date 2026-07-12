@@ -241,7 +241,7 @@ export function CharacterForm({
         {characterId ? (
           <p className="text-sm text-zinc-400">
             クトゥルフ神話TRPG <strong>{edition === "7" ? "7版" : "6版"}</strong>
-            <span className="text-xs text-zinc-600 ml-2">(作成後は変更できません)</span>
+            <span className="text-xs text-zinc-400 ml-2">(作成後は変更できません)</span>
           </p>
         ) : (
           <div className="flex gap-2">
@@ -328,7 +328,7 @@ export function CharacterForm({
                     画像を外す
                   </button>
                 )}
-                <p className="text-xs text-zinc-600">PNG/JPEG/WebP/GIF、5MBまで</p>
+                <p className="text-xs text-zinc-400">PNG/JPEG/WebP/GIF、5MBまで</p>
               </div>
             </div>
           </div>
@@ -378,6 +378,7 @@ export function CharacterForm({
               <input
                 value={stats[key] || ""}
                 onChange={(e) => setStat(key, e.target.value)}
+                aria-label={STAT_LABELS[key]}
                 inputMode="numeric"
                 className="w-full bg-transparent text-center text-xl font-bold focus:outline-none"
               />
@@ -515,6 +516,7 @@ export function CharacterForm({
                         return next;
                       })
                     }
+                    aria-label="削除"
                     className="text-zinc-600 hover:text-red-400"
                   >
                     ×
@@ -569,14 +571,14 @@ export function CharacterForm({
           </div>
         </div>
         {weapons.length === 0 ? (
-          <p className="text-xs text-zinc-600">
+          <p className="text-xs text-zinc-400">
             武器を登録すると、詳細画面から命中判定+ダメージロールをワンタップで行えます。ダメージ式の
             <code className="mx-1 rounded bg-zinc-950 px-1">DB</code>
             はダメージボーナス ({derived.damageBonus}) に自動で置き換わります。
           </p>
         ) : (
           <div className="space-y-1.5">
-            <div className="hidden sm:grid grid-cols-[1fr_1fr_120px_1fr_28px] gap-1.5 text-xs text-zinc-600 px-1">
+            <div className="hidden sm:grid grid-cols-[1fr_1fr_120px_1fr_28px] gap-1.5 text-xs text-zinc-400 px-1">
               <span>武器名</span>
               <span>技能</span>
               <span>ダメージ</span>
@@ -635,6 +637,7 @@ export function CharacterForm({
                 />
                 <button
                   onClick={() => setWeapons((prev) => prev.filter((_, j) => j !== i))}
+                  aria-label="削除"
                   className="text-zinc-600 hover:text-red-400"
                   title="削除"
                 >

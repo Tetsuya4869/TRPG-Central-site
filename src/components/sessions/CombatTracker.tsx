@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   combatStateSchema,
   sortByDex,
@@ -46,21 +47,84 @@ export function CombatTracker({
   const [npcDex, setNpcDex] = useState("");
   const [npcHp, setNpcHp] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [savedFlash, setSavedFlash] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
-  async function persist(state: CombatState | null) {
-    setCombat(state);
+  // 最新のcombatを参照するためのref (debounce保存が古いstateを送らないように)
+  const combatRef = useRef<CombatState | null>(combat);
+  useEffect(() => {
+    combatRef.current = combat;
+  }, [combat]);
+  // HP増減のdebounce保存タイマー
+  const hpSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 「✓ 保存」表示を消すタイマー
+  const savedFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // アンマウント時にタイマーを破棄
+  useEffect(() => {
+    return () => {
+      if (hpSaveTimer.current) clearTimeout(hpSaveTimer.current);
+      if (savedFlashTimer.current) clearTimeout(savedFlashTimer.current);
+    };
+  }, []);
+
+  // サーバーへの保存のみ行う (ローカルstateは呼び出し側で更新済み)
+  async function persistRemote(state: CombatState | null) {
     setSaving(true);
+    setSaveError("");
     try {
-      await fetch(`/api/sessions/${sessionId}`, {
+      const res = await fetch(`/api/sessions/${sessionId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           combatJson: state ? JSON.stringify(state) : null,
         }),
       });
+      if (!res.ok) {
+        setSaveError("保存に失敗しました");
+        return;
+      }
+      // 保存成功を短時間だけ表示
+      setSavedFlash(true);
+      if (savedFlashTimer.current) clearTimeout(savedFlashTimer.current);
+      savedFlashTimer.current = setTimeout(() => setSavedFlash(false), 1500);
+    } catch {
+      setSaveError("保存に失敗しました");
     } finally {
       setSaving(false);
     }
+  }
+
+  async function persist(state: CombatState | null) {
+    // 保留中のHP保存があれば破棄 (この保存に最新stateが含まれる)
+    if (hpSaveTimer.current) {
+      clearTimeout(hpSaveTimer.current);
+      hpSaveTimer.current = null;
+    }
+    setCombat(state);
+    combatRef.current = state;
+    await persistRemote(state);
+  }
+
+  // HP増減: ローカルへ即時反映し、保存はdebounceでまとめて1回のPUTにする
+  // (連続クリックでPUTが並走し、古い応答で巻き戻る問題への対策)
+  function changeHp(id: string, delta: number) {
+    const current = combatRef.current;
+    if (!current) return;
+    const next: CombatState = {
+      ...current,
+      combatants: current.combatants.map((c) =>
+        c.id === id ? { ...c, hp: c.hp + delta } : c,
+      ),
+    };
+    combatRef.current = next;
+    setCombat(next);
+    if (hpSaveTimer.current) clearTimeout(hpSaveTimer.current);
+    hpSaveTimer.current = setTimeout(() => {
+      hpSaveTimer.current = null;
+      persistRemote(combatRef.current);
+    }, 500);
   }
 
   function addPc(pc: CombatPc) {
@@ -85,8 +149,11 @@ export function CombatTracker({
     if (!combat || !npcName.trim()) return;
     const dex = parseInt(npcDex, 10) || 10;
     const hp = parseInt(npcHp, 10) || 10;
+    // 保存済みIDと衝突しない連番を採る (Date.now()はReact Compilerの純粋性ルールに抵触)
+    let n = 1;
+    while (combat.combatants.some((c) => c.id === `npc-${n}`)) n += 1;
     const combatant: Combatant = {
-      id: `npc-${Date.now()}`,
+      id: `npc-${n}`,
       name: npcName.trim(),
       kind: "NPC",
       characterId: null,
@@ -99,16 +166,6 @@ export function CombatTracker({
     setNpcDex("");
     setNpcHp("");
     persist({ ...combat, combatants: [...combat.combatants, combatant] });
-  }
-
-  function updateCombatant(id: string, patch: Partial<Combatant>) {
-    if (!combat) return;
-    persist({
-      ...combat,
-      combatants: combat.combatants.map((c) =>
-        c.id === id ? { ...c, ...patch } : c,
-      ),
-    });
   }
 
   function removeCombatant(id: string) {
@@ -132,11 +189,15 @@ export function CombatTracker({
           <h2 className="font-semibold text-zinc-300">⚔️ 戦闘トラッカー</h2>
           <button
             onClick={() => persist(emptyCombat())}
-            className="rounded border border-red-900 px-4 py-1.5 text-sm text-red-300 hover:bg-red-950/50"
+            disabled={saving}
+            className="rounded border border-red-900 px-4 py-1.5 text-sm text-red-300 hover:bg-red-950/50 disabled:opacity-50"
           >
             戦闘を開始
           </button>
         </div>
+        {saveError && (
+          <p className="mt-2 text-xs text-red-400">{saveError}</p>
+        )}
       </section>
     );
   }
@@ -149,30 +210,51 @@ export function CombatTracker({
         <h2 className="font-semibold text-red-200">
           ⚔️ 戦闘トラッカー — ラウンド {combat.round}
           {saving && <span className="ml-2 text-xs text-zinc-500">保存中…</span>}
+          {!saving && savedFlash && !saveError && (
+            <span className="ml-2 text-xs text-emerald-400">✓ 保存</span>
+          )}
+          {saveError && (
+            <span className="ml-2 text-xs text-red-400">{saveError}</span>
+          )}
         </h2>
         <div className="flex gap-2">
           <button
             onClick={() => persist(prevTurn(combat))}
-            className="rounded border border-zinc-700 px-3 py-1.5 text-xs hover:border-zinc-500"
+            disabled={saving}
+            className="rounded border border-zinc-700 px-3 py-1.5 text-xs hover:border-zinc-500 disabled:opacity-50"
           >
             ← 前の手番
           </button>
           <button
             onClick={() => persist(nextTurn(combat))}
-            className="rounded bg-red-700 px-4 py-1.5 text-xs font-semibold hover:bg-red-600"
+            disabled={saving}
+            className="rounded bg-red-700 px-4 py-1.5 text-xs font-semibold hover:bg-red-600 disabled:opacity-50"
           >
             次の手番 →
           </button>
           <button
-            onClick={() => {
-              if (confirm("戦闘を終了してトラッカーをリセットしますか?")) persist(null);
-            }}
-            className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-500 hover:border-zinc-500"
+            onClick={() => setConfirmReset(true)}
+            disabled={saving}
+            className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-500 hover:border-zinc-500 disabled:opacity-50"
           >
             終了
           </button>
         </div>
       </div>
+
+      {/* 戦闘リセットの確認ダイアログ */}
+      <ConfirmDialog
+        open={confirmReset}
+        title="戦闘を終了しますか?"
+        message="トラッカーの内容はリセットされます。"
+        confirmLabel="終了する"
+        danger
+        onConfirm={() => {
+          setConfirmReset(false);
+          persist(null);
+        }}
+        onCancel={() => setConfirmReset(false)}
+      />
 
       {/* イニシアチブ順リスト */}
       {sorted.length === 0 ? (
@@ -201,10 +283,9 @@ export function CombatTracker({
                 </span>
                 <span className="flex items-center gap-1 ml-auto">
                   <button
-                    onClick={() =>
-                      updateCombatant(combatant.id, { hp: combatant.hp - 1 })
-                    }
-                    className="rounded border border-zinc-700 w-6 h-6 text-xs hover:border-red-500"
+                    onClick={() => changeHp(combatant.id, -1)}
+                    aria-label="HPを1減らす"
+                    className="rounded border border-zinc-700 w-8 h-8 text-xs hover:border-red-500"
                   >
                     −
                   </button>
@@ -214,10 +295,9 @@ export function CombatTracker({
                     {combatant.hp}/{combatant.maxHp}
                   </span>
                   <button
-                    onClick={() =>
-                      updateCombatant(combatant.id, { hp: combatant.hp + 1 })
-                    }
-                    className="rounded border border-zinc-700 w-6 h-6 text-xs hover:border-emerald-500"
+                    onClick={() => changeHp(combatant.id, +1)}
+                    aria-label="HPを1増やす"
+                    className="rounded border border-zinc-700 w-8 h-8 text-xs hover:border-emerald-500"
                   >
                     +
                   </button>
@@ -236,7 +316,9 @@ export function CombatTracker({
                 />
                 <button
                   onClick={() => removeCombatant(combatant.id)}
-                  className="text-xs text-zinc-600 hover:text-red-400"
+                  disabled={saving}
+                  aria-label="削除"
+                  className="w-8 h-8 rounded text-xs text-zinc-600 hover:text-red-400 disabled:opacity-50"
                 >
                   ✕
                 </button>
@@ -254,7 +336,8 @@ export function CombatTracker({
             <button
               key={pc.characterId}
               onClick={() => addPc(pc)}
-              className="rounded border border-emerald-800 px-3 py-1 text-xs text-emerald-300 hover:bg-emerald-950/50"
+              disabled={saving}
+              className="rounded border border-emerald-800 px-3 py-1 text-xs text-emerald-300 hover:bg-emerald-950/50 disabled:opacity-50"
             >
               + {pc.name}
             </button>
@@ -282,7 +365,7 @@ export function CombatTracker({
           />
           <button
             onClick={addNpc}
-            disabled={!npcName.trim()}
+            disabled={!npcName.trim() || saving}
             className="rounded border border-zinc-700 px-3 py-1 text-xs hover:border-red-500 disabled:opacity-50"
           >
             追加

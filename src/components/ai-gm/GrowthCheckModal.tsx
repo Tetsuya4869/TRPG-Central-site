@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface Candidate {
   skillName: string;
@@ -44,6 +44,17 @@ export function GrowthCheckModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  // 開いたら✕ボタンにフォーカスし、Escapeキーで閉じられるようにする
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/ai-gm/sessions/${sessionId}/growth`);
@@ -118,11 +129,25 @@ export function GrowthCheckModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-lg rounded-lg border border-zinc-700 bg-zinc-900 p-6 space-y-4 max-h-[85vh] overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="技能成長チェック"
+        className="w-full max-w-lg rounded-lg border border-zinc-700 bg-zinc-900 p-6 space-y-4 max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold">📈 技能成長チェック</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300">
+          <button
+            ref={closeRef}
+            onClick={onClose}
+            aria-label="閉じる"
+            className="text-zinc-500 hover:text-zinc-300"
+          >
             ✕
           </button>
         </div>
