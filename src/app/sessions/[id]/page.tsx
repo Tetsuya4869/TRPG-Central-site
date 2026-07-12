@@ -4,6 +4,7 @@ import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { StatusBadge, STATUS_LABELS } from "@/components/sessions/StatusBadge";
+import { ScenarioAssetsPanel } from "@/components/scenarios/ScenarioAssetsPanel";
 
 interface CharacterSummary {
   id: string;
@@ -275,6 +276,11 @@ export default function SessionDetailPage({
           )}
         </section>
       </div>
+
+      {/* 紐付きシナリオのNPC・ハンドアウト (読み取り専用) */}
+      {session.scenario && (
+        <ScenarioAssetsPanel scenarioId={session.scenario.id} readOnly />
+      )}
 
       {error && (
         <p className="rounded border border-red-800 bg-red-950/50 px-4 py-2 text-sm text-red-300">

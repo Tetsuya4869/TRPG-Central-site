@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { ScenarioAssetsPanel } from "@/components/scenarios/ScenarioAssetsPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +70,8 @@ export default async function ScenarioDetailPage({
           {scenario.content}
         </p>
       </section>
+
+      <ScenarioAssetsPanel scenarioId={scenario.id} />
 
       <Link href="/scenarios" className="inline-block text-sm text-zinc-500 hover:text-emerald-300">
         ← シナリオ一覧へ戻る

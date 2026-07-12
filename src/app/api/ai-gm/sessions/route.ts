@@ -90,12 +90,28 @@ export async function POST(req: NextRequest) {
 
   // ライブラリシナリオの紐付けは任意。存在しないIDは黙って無視する
   let scenarioId: string | null = null;
+  let scenarioText = parsed.data.scenario;
   if (parsed.data.scenarioId) {
     const scenarioRef = await prisma.scenario.findUnique({
       where: { id: parsed.data.scenarioId },
-      select: { id: true },
+      select: {
+        id: true,
+        assets: {
+          where: { kind: "NPC" },
+          orderBy: { position: "asc" },
+          select: { name: true, content: true },
+        },
+      },
     });
     scenarioId = scenarioRef?.id ?? null;
+    // NPC資料はキーパー用情報としてスナップショットに連結する
+    // (ハンドアウトはプレイヤー向け資料なのでAIには渡さない)
+    if (scenarioRef && scenarioRef.assets.length > 0) {
+      const npcSection = scenarioRef.assets
+        .map((a) => `### ${a.name}\n${a.content}`)
+        .join("\n\n");
+      scenarioText += `\n\n## 追加NPC資料\n${npcSection}`;
+    }
   }
 
   // 選択順を保持してポジションを振る
@@ -105,7 +121,7 @@ export async function POST(req: NextRequest) {
   const session = await prisma.aiGmSession.create({
     data: {
       title: parsed.data.title,
-      scenario: parsed.data.scenario,
+      scenario: scenarioText,
       scenarioId,
       members: {
         create: ordered.map((character, position) => ({

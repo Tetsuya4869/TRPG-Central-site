@@ -69,6 +69,21 @@ model Scenario {
 
   gameSessions GameSession[]
   aiGmSessions AiGmSession[]
+  assets       ScenarioAsset[]
+}
+
+// シナリオ付属資料。kind: "NPC" | "HANDOUT"
+model ScenarioAsset {
+  id         String   @id @default(cuid())
+  scenarioId String
+  scenario   Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  kind       String
+  name       String
+  content    String
+  imageUrl   String? // /uploads/… 相対パス
+  position   Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model SessionCharacter {
