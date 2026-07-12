@@ -4,6 +4,7 @@ import { use, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { OutcomeBadge } from "@/components/dice/OutcomeBadge";
 import { GrowthCheckModal } from "@/components/ai-gm/GrowthCheckModal";
+import { SessionStats } from "@/components/ai-gm/SessionStats";
 
 interface DisplayMessage {
   kind: "user" | "assistant" | "tool";
@@ -139,6 +140,7 @@ export default function AiGmPlayPage({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [showGrowthModal, setShowGrowthModal] = useState(false);
+  const [showStats, setShowStats] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -299,12 +301,24 @@ export default function AiGmPlayPage({
           </div>
           <div className="flex items-center gap-2">
             {messages.length > 0 && (
-              <a
-                href={`/api/ai-gm/sessions/${id}/replay`}
-                className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 hover:border-emerald-500 hover:text-emerald-300"
-              >
-                📄 リプレイをDL
-              </a>
+              <>
+                <button
+                  onClick={() => setShowStats(!showStats)}
+                  className={`rounded border px-3 py-1.5 text-xs ${
+                    showStats
+                      ? "border-emerald-500 text-emerald-300"
+                      : "border-zinc-700 text-zinc-400 hover:border-emerald-500 hover:text-emerald-300"
+                  }`}
+                >
+                  📊 統計
+                </button>
+                <a
+                  href={`/api/ai-gm/sessions/${id}/replay`}
+                  className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 hover:border-emerald-500 hover:text-emerald-300"
+                >
+                  📄 リプレイをDL
+                </a>
+              </>
             )}
             {session.status === "ONGOING" ? (
               <button
@@ -333,6 +347,12 @@ export default function AiGmPlayPage({
           <div className="mb-3 rounded border border-amber-700 bg-amber-950/40 px-4 py-2 text-sm text-amber-200">
             ⚠️ ANTHROPIC_API_KEY が未設定のため発言できません。.env
             にキーを設定してサーバーを再起動してください。
+          </div>
+        )}
+
+        {showStats && (
+          <div className="mb-3">
+            <SessionStats sessionId={id} />
           </div>
         )}
 
