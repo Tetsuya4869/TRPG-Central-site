@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
       occupation: d.occupation ?? null,
       age: d.age ?? null,
       sex: d.sex ?? null,
+      imageUrl: d.imageUrl ?? null,
       str: d.str,
       con: d.con,
       pow: d.pow,

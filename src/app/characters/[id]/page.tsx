@@ -48,14 +48,24 @@ export default async function CharacterDetailPage({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">{character.name}</h1>
-          <p className="text-sm text-zinc-500">
-            {character.occupation ?? "職業不明"}
-            {character.age != null && ` / ${character.age}歳`}
-            {character.sex && ` / ${character.sex}`}
-            {character.playerName && ` / PL: ${character.playerName}`}
-          </p>
+        <div className="flex items-center gap-4">
+          {character.imageUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={character.imageUrl}
+              alt={character.name}
+              className="h-20 w-20 rounded-lg object-cover border border-zinc-700"
+            />
+          )}
+          <div>
+            <h1 className="text-2xl font-bold">{character.name}</h1>
+            <p className="text-sm text-zinc-500">
+              {character.occupation ?? "職業不明"}
+              {character.age != null && ` / ${character.age}歳`}
+              {character.sex && ` / ${character.sex}`}
+              {character.playerName && ` / PL: ${character.playerName}`}
+            </p>
+          </div>
         </div>
         <div className="flex gap-2">
           <Link

@@ -23,6 +23,7 @@ export default async function EditCharacterPage({
     occupation: character.occupation ?? "",
     age: character.age?.toString() ?? "",
     sex: character.sex ?? "",
+    imageUrl: character.imageUrl ?? "",
     stats: {
       str: character.str,
       con: character.con,

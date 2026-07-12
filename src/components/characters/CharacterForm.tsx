@@ -26,6 +26,7 @@ export interface CharacterFormValues {
   occupation: string;
   age: string;
   sex: string;
+  imageUrl: string;
   stats: StatBlock;
   skills: Skills;
   memo: string;
@@ -55,6 +56,8 @@ export function CharacterForm({
   const [occupation, setOccupation] = useState(initial?.occupation ?? "");
   const [age, setAge] = useState(initial?.age ?? "");
   const [sex, setSex] = useState(initial?.sex ?? "");
+  const [imageUrl, setImageUrl] = useState(initial?.imageUrl ?? "");
+  const [uploading, setUploading] = useState(false);
   const [stats, setStats] = useState<StatBlock>(initial?.stats ?? defaultStats);
   const [skills, setSkills] = useState<Skills>(initial?.skills ?? {});
   const [memo, setMemo] = useState(initial?.memo ?? "");
@@ -110,6 +113,26 @@ export function CharacterForm({
     setCustomSkill("");
   }
 
+  async function uploadImage(file: File) {
+    setUploading(true);
+    setError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/uploads", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "画像のアップロードに失敗しました");
+        return;
+      }
+      setImageUrl(data.url);
+    } catch {
+      setError("画像のアップロードに失敗しました");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function save() {
     if (!name.trim()) {
       setError("探索者名を入力してください");
@@ -123,6 +146,7 @@ export function CharacterForm({
       occupation: occupation.trim() || null,
       age: age ? parseInt(age, 10) : null,
       sex: sex.trim() || null,
+      imageUrl: imageUrl || null,
       ...stats,
       skills,
       memo: memo.trim() || null,
@@ -184,6 +208,48 @@ export function CharacterForm({
               className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 focus:border-emerald-500 focus:outline-none"
             />
           </label>
+          <div className="sm:col-span-2 space-y-2">
+            <span className="text-sm text-zinc-400">立ち絵</span>
+            <div className="flex items-center gap-4">
+              {imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={imageUrl}
+                  alt="立ち絵"
+                  className="h-24 w-24 rounded object-cover border border-zinc-700"
+                />
+              ) : (
+                <div className="h-24 w-24 rounded border border-dashed border-zinc-700 flex items-center justify-center text-2xl text-zinc-600">
+                  👤
+                </div>
+              )}
+              <div className="space-y-2">
+                <label className="inline-block cursor-pointer rounded border border-zinc-700 px-3 py-1.5 text-sm hover:border-emerald-500">
+                  {uploading ? "アップロード中…" : "画像を選択"}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    className="hidden"
+                    disabled={uploading}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) uploadImage(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                {imageUrl && (
+                  <button
+                    onClick={() => setImageUrl("")}
+                    className="block text-xs text-zinc-500 hover:text-red-400"
+                  >
+                    画像を外す
+                  </button>
+                )}
+                <p className="text-xs text-zinc-600">PNG/JPEG/WebP/GIF、5MBまで</p>
+              </div>
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <label className="text-sm space-y-1">
               <span className="text-zinc-400">年齢</span>

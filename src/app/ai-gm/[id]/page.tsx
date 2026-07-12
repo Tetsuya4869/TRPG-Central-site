@@ -28,6 +28,7 @@ interface SessionDetail {
     id: string;
     name: string;
     occupation: string | null;
+    imageUrl: string | null;
     skillsJson: string;
   };
   messages: DisplayMessage[];
@@ -376,6 +377,14 @@ export default function AiGmPlayPage({
       {/* サイドバー */}
       <aside className="space-y-4 lg:sticky lg:top-20 self-start">
         <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-4 space-y-3">
+          {session.character.imageUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={session.character.imageUrl}
+              alt={session.character.name}
+              className="w-full rounded-lg object-cover border border-zinc-800 max-h-48"
+            />
+          )}
           <h2 className="text-sm font-semibold text-zinc-300">
             {session.character.name}
           </h2>

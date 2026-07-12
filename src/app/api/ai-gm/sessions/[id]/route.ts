@@ -29,6 +29,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       id: session.character.id,
       name: session.character.name,
       occupation: session.character.occupation,
+      imageUrl: session.character.imageUrl,
       skillsJson: session.character.skillsJson,
     },
     messages: toDisplayMessages(session.messages),
