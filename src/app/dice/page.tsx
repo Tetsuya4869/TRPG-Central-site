@@ -1,7 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { OutcomeBadge } from "@/components/dice/OutcomeBadge";
+import { deriveStats } from "@/lib/coc6/stats";
+import { SKILL_DEFS, skillBase } from "@/lib/coc6/skills";
+import type { StatBlock } from "@/lib/coc6/types";
+
+interface CharacterRecord {
+  id: string;
+  name: string;
+  currentSan: number;
+  str: number;
+  con: number;
+  pow: number;
+  dex: number;
+  app: number;
+  siz: number;
+  int_: number;
+  edu: number;
+  skillsJson: string;
+}
 
 interface DiceRollRecord {
   id: string;
@@ -25,6 +43,8 @@ export default function DicePage() {
   const [latest, setLatest] = useState<DiceRollRecord | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [characters, setCharacters] = useState<CharacterRecord[]>([]);
+  const [selectedCharacterId, setSelectedCharacterId] = useState("");
 
   const fetchHistory = useCallback(async () => {
     const res = await fetch("/api/dice");
@@ -33,7 +53,55 @@ export default function DicePage() {
 
   useEffect(() => {
     fetchHistory();
+    fetch("/api/characters")
+      .then((res) => res.json())
+      .then(setCharacters)
+      .catch(() => {});
   }, [fetchHistory]);
+
+  // 選択中の探索者の判定ボタン一覧 (特殊判定+実効技能値)
+  const characterChecks = useMemo(() => {
+    const character = characters.find((c) => c.id === selectedCharacterId);
+    if (!character) return null;
+    const stats: StatBlock = {
+      str: character.str,
+      con: character.con,
+      pow: character.pow,
+      dex: character.dex,
+      app: character.app,
+      siz: character.siz,
+      int_: character.int_,
+      edu: character.edu,
+    };
+    let assigned: Record<string, number> = {};
+    try {
+      assigned = JSON.parse(character.skillsJson);
+    } catch {
+      // 壊れたJSONは無視して初期値のみで表示
+    }
+    const derived = deriveStats(stats, assigned["クトゥルフ神話"] ?? 0);
+    const special = [
+      { name: "SANチェック", value: character.currentSan },
+      { name: "アイデア", value: derived.idea },
+      { name: "幸運", value: derived.luck },
+      { name: "知識", value: derived.knowledge },
+    ];
+    const skills = SKILL_DEFS.map((def) => ({
+      name: def.name,
+      value: assigned[def.name] ?? skillBase(def, stats),
+      assigned: assigned[def.name] !== undefined,
+    }));
+    for (const [name, value] of Object.entries(assigned)) {
+      if (!SKILL_DEFS.some((d) => d.name === name)) {
+        skills.push({ name, value, assigned: true });
+      }
+    }
+    // 割り振り済みを先に、値の高い順
+    skills.sort((a, b) =>
+      a.assigned === b.assigned ? b.value - a.value : a.assigned ? -1 : 1,
+    );
+    return { character, special, skills };
+  }, [characters, selectedCharacterId]);
 
   async function roll(body: Record<string, unknown>) {
     setBusy(true);
@@ -141,6 +209,69 @@ export default function DicePage() {
               01–05 クリティカル / 96–00 ファンブル / 出目≦目標値で成功
             </p>
           </section>
+
+          {/* 探索者で判定 */}
+          {characters.length > 0 && (
+            <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="font-semibold text-zinc-300">探索者で判定</h2>
+                <select
+                  value={selectedCharacterId}
+                  onChange={(e) => setSelectedCharacterId(e.target.value)}
+                  className="rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none"
+                >
+                  <option value="">探索者を選択…</option>
+                  {characters.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {characterChecks && (
+                <>
+                  <div className="flex flex-wrap gap-1.5">
+                    {characterChecks.special.map((s) => (
+                      <button
+                        key={s.name}
+                        onClick={() =>
+                          roll({
+                            target: s.value,
+                            context: `${characterChecks.character.name}/${s.name}`,
+                          })
+                        }
+                        disabled={busy}
+                        className="rounded border border-purple-800 bg-purple-950/30 px-2.5 py-1 text-xs text-purple-200 hover:border-purple-500 disabled:opacity-50"
+                      >
+                        {s.name} {s.value}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto pr-1">
+                    {characterChecks.skills.map((s) => (
+                      <button
+                        key={s.name}
+                        onClick={() =>
+                          roll({
+                            target: s.value,
+                            context: `${characterChecks.character.name}/${s.name}`,
+                          })
+                        }
+                        disabled={busy}
+                        className={`rounded border px-2.5 py-1 text-xs disabled:opacity-50 ${
+                          s.assigned
+                            ? "border-emerald-800 bg-emerald-950/30 text-emerald-200 hover:border-emerald-500"
+                            : "border-zinc-800 text-zinc-500 hover:border-zinc-600"
+                        }`}
+                      >
+                        {s.name} {s.value}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </section>
+          )}
 
           {error && (
             <p className="rounded border border-red-800 bg-red-950/50 px-4 py-2 text-sm text-red-300">

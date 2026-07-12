@@ -50,12 +50,28 @@ export default async function CharactersPage() {
                 href={`/characters/${c.id}`}
                 className="block rounded-lg border border-zinc-800 bg-zinc-900 p-4 hover:border-emerald-600 transition-colors"
               >
-                <h2 className="font-semibold text-lg">{c.name}</h2>
-                <p className="text-sm text-zinc-500 mb-3">
-                  {c.occupation ?? "職業不明"}
-                  {c.age != null && ` / ${c.age}歳`}
-                  {c.playerName && ` / PL: ${c.playerName}`}
-                </p>
+                <div className="flex items-center gap-3 mb-3">
+                  {c.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={c.imageUrl}
+                      alt=""
+                      className="h-12 w-12 rounded-full object-cover border border-zinc-700"
+                    />
+                  ) : (
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-800 text-xl">
+                      👤
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <h2 className="font-semibold text-lg truncate">{c.name}</h2>
+                    <p className="text-sm text-zinc-500 truncate">
+                      {c.occupation ?? "職業不明"}
+                      {c.age != null && ` / ${c.age}歳`}
+                      {c.playerName && ` / PL: ${c.playerName}`}
+                    </p>
+                  </div>
+                </div>
                 <div className="flex gap-4 text-xs text-zinc-400">
                   <span>
                     HP {c.currentHp}/{derived.hp}

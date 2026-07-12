@@ -78,8 +78,16 @@ export async function POST(req: NextRequest, { params }: Params) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
+      // クライアント切断後のenqueueは例外になるため握りつぶす
+      // (ループ自体は継続し、メッセージの永続化は完了させる)
+      let closed = false;
       const emit = (event: SseEvent) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        } catch {
+          closed = true;
+        }
       };
       try {
         await runGmTurn({ session, history, nextSeq, emit });
@@ -88,7 +96,13 @@ export async function POST(req: NextRequest, { params }: Params) {
           e instanceof Error ? e.message : "AI GMの応答中にエラーが発生しました";
         emit({ type: "error", message });
       } finally {
-        controller.close();
+        if (!closed) {
+          try {
+            controller.close();
+          } catch {
+            // すでに閉じられている場合は無視
+          }
+        }
       }
     },
   });

@@ -17,7 +17,7 @@ interface AiGmSessionSummary {
   title: string;
   status: string;
   updatedAt: string;
-  character: { id: string; name: string };
+  character: { id: string; name: string; imageUrl: string | null };
 }
 
 interface CharacterSummary {
@@ -312,7 +312,20 @@ export default function AiGmPage() {
               key={s.id}
               className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 p-4 hover:border-emerald-600 transition-colors"
             >
-              <Link href={`/ai-gm/${s.id}`} className="flex-1">
+              <Link href={`/ai-gm/${s.id}`} className="flex flex-1 items-center gap-3">
+                {s.character.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={s.character.imageUrl}
+                    alt=""
+                    className="h-10 w-10 rounded-full object-cover border border-zinc-700 shrink-0"
+                  />
+                ) : (
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-lg">
+                    🐙
+                  </span>
+                )}
+                <span className="min-w-0">
                 <div className="flex items-center gap-3">
                   <h2 className="font-semibold">{s.title}</h2>
                   <span
@@ -328,6 +341,7 @@ export default function AiGmPage() {
                 <p className="text-sm text-zinc-500 mt-1">
                   探索者: {s.character.name}
                 </p>
+                </span>
               </Link>
               <button
                 onClick={() => remove(s.id, s.title)}

@@ -15,7 +15,7 @@ const createSchema = z.object({
 export async function GET() {
   const sessions = await prisma.aiGmSession.findMany({
     orderBy: { updatedAt: "desc" },
-    include: { character: { select: { id: true, name: true } } },
+    include: { character: { select: { id: true, name: true, imageUrl: true } } },
   });
   return NextResponse.json({ sessions, apiKeyConfigured: hasApiKey() });
 }

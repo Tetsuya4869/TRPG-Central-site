@@ -5,6 +5,7 @@ import { deriveStats } from "@/lib/coc6/stats";
 import { SKILL_DEFS, skillBase } from "@/lib/coc6/skills";
 import { skillsSchema, type StatBlock } from "@/lib/coc6/types";
 import { DeleteCharacterButton } from "@/components/characters/DeleteCharacterButton";
+import { DuplicateCharacterButton } from "@/components/characters/DuplicateCharacterButton";
 import { CocofoliaExportButton } from "@/components/characters/CocofoliaExportButton";
 import { buildCocofoliaCharacter } from "@/lib/cocofolia";
 
@@ -79,6 +80,7 @@ export default async function CharacterDetailPage({
           <CocofoliaExportButton
             json={JSON.stringify(buildCocofoliaCharacter(character))}
           />
+          <DuplicateCharacterButton id={character.id} />
           <DeleteCharacterButton id={character.id} name={character.name} />
         </div>
       </div>
