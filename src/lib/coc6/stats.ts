@@ -47,7 +47,7 @@ export function damageBonus(str: number, siz: number): string {
   if (sum <= 24) return "±0";
   if (sum <= 32) return "+1d4";
   if (sum <= 40) return "+1d6";
-  // 41以上は8ごとに+1d6 (6版ルール)
+  // 41以上は16ごとに+1d6 (6版ルール)
   const extra = Math.floor((sum - 41) / 16) + 2;
   return `+${extra}d6`;
 }
@@ -58,9 +58,10 @@ export function deriveStats(stats: StatBlock, cthulhuMythos = 0): DerivedStats {
     maxSan: 99 - cthulhuMythos,
     hp: Math.ceil((stats.con + stats.siz) / 2),
     mp: stats.pow,
-    idea: stats.int_ * 5,
-    luck: stats.pow * 5,
-    knowledge: stats.edu * 5,
+    idea: Math.min(99, stats.int_ * 5),
+    luck: Math.min(99, stats.pow * 5),
+    // EDU最大21 → ×5=105 が1d100判定の目標値として意味を持つよう99にクランプ
+    knowledge: Math.min(99, stats.edu * 5),
     damageBonus: damageBonus(stats.str, stats.siz),
     occupationPoints: stats.edu * 20,
     hobbyPoints: stats.int_ * 10,

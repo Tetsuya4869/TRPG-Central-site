@@ -25,12 +25,17 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!session || !character) {
     return NextResponse.json({ error: "卓または探索者が見つかりません" }, { status: 404 });
   }
-  const link = await prisma.sessionCharacter.upsert({
+  const existing = await prisma.sessionCharacter.findUnique({
     where: {
       sessionId_characterId: { sessionId: id, characterId: character.id },
     },
-    create: { sessionId: id, characterId: character.id },
-    update: {},
+    include: { character: true },
+  });
+  if (existing) {
+    return NextResponse.json(existing, { status: 200 }); // 既存リンクは新規作成ではない
+  }
+  const link = await prisma.sessionCharacter.create({
+    data: { sessionId: id, characterId: character.id },
     include: { character: true },
   });
   return NextResponse.json(link, { status: 201 });

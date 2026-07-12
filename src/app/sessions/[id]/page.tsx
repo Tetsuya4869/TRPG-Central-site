@@ -7,6 +7,7 @@ import { StatusBadge, STATUS_LABELS } from "@/components/sessions/StatusBadge";
 import { ScenarioAssetsPanel } from "@/components/scenarios/ScenarioAssetsPanel";
 import { KpAssistantPanel } from "@/components/sessions/KpAssistantPanel";
 import { CombatTracker, type CombatPc } from "@/components/sessions/CombatTracker";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 interface CharacterSummary {
   id: string;
@@ -50,6 +51,15 @@ export default function SessionDetailPage({
   const [notesDirty, setNotesDirty] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  // 卓削除の確認ダイアログ
+  const [confirmDeleteSession, setConfirmDeleteSession] = useState(false);
+  // 「外す」確認ダイアログの対象探索者
+  const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
+  // ステータス変更の二重送信防止
+  const [statusBusy, setStatusBusy] = useState(false);
+  // 保存成功フィードバック (2秒で消える)
+  const [statusSaved, setStatusSaved] = useState(false);
+  const [notesSaved, setNotesSaved] = useState(false);
 
   const load = useCallback(async () => {
     const [sRes, cRes] = await Promise.all([
@@ -72,19 +82,48 @@ export default function SessionDetailPage({
     load();
   }, [load]);
 
-  async function update(patch: Record<string, unknown>) {
+  async function update(patch: Record<string, unknown>): Promise<boolean> {
     setError("");
-    const res = await fetch(`/api/sessions/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error ?? "更新に失敗しました");
-      return;
+    try {
+      const res = await fetch(`/api/sessions/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "更新に失敗しました");
+        return false;
+      }
+      setSession(data);
+      return true;
+    } catch {
+      setError("通信エラーが発生しました");
+      return false;
     }
-    setSession(data);
+  }
+
+  async function changeStatus(status: string) {
+    if (statusBusy) return;
+    setStatusBusy(true);
+    try {
+      const ok = await update({ status });
+      if (ok) {
+        setStatusSaved(true);
+        setTimeout(() => setStatusSaved(false), 2000);
+      }
+    } finally {
+      setStatusBusy(false);
+    }
+  }
+
+  async function saveNotes() {
+    const ok = await update({ notes });
+    if (ok) {
+      setNotesDirty(false);
+      setNotesSaved(true);
+      setTimeout(() => setNotesSaved(false), 2000);
+    }
   }
 
   async function addCharacter() {
@@ -104,20 +143,30 @@ export default function SessionDetailPage({
     await load();
   }
 
-  async function removeCharacter(characterId: string) {
-    await fetch(`/api/sessions/${id}/characters?characterId=${characterId}`, {
-      method: "DELETE",
-    });
+  async function removeCharacter() {
+    if (!removeTarget) return;
+    const target = removeTarget;
+    setRemoveTarget(null);
+    setError("");
+    const res = await fetch(
+      `/api/sessions/${id}/characters?characterId=${target.id}`,
+      { method: "DELETE" },
+    );
+    if (!res.ok) {
+      setError("参加探索者を外せませんでした");
+      return;
+    }
     await load();
   }
 
   async function removeSession() {
-    if (!session) return;
-    if (!confirm(`「${session.title}」を削除しますか?`)) return;
+    setConfirmDeleteSession(false);
     const res = await fetch(`/api/sessions/${id}`, { method: "DELETE" });
     if (res.ok) {
       router.push("/sessions");
       router.refresh();
+    } else {
+      setError("削除に失敗しました");
     }
   }
 
@@ -143,7 +192,7 @@ export default function SessionDetailPage({
           <StatusBadge status={session.status} />
         </div>
         <button
-          onClick={removeSession}
+          onClick={() => setConfirmDeleteSession(true)}
           className="rounded border border-red-900 px-4 py-2 text-sm text-red-400 hover:bg-red-950/50"
         >
           削除
@@ -188,8 +237,9 @@ export default function SessionDetailPage({
               {Object.entries(STATUS_LABELS).map(([value, label]) => (
                 <button
                   key={value}
-                  onClick={() => update({ status: value })}
-                  className={`rounded px-3 py-1 text-xs font-semibold border ${
+                  onClick={() => changeStatus(value)}
+                  disabled={statusBusy}
+                  className={`rounded px-3 py-1 text-xs font-semibold border disabled:opacity-50 ${
                     session.status === value
                       ? "border-emerald-500 bg-emerald-600/30 text-emerald-200"
                       : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
@@ -198,6 +248,9 @@ export default function SessionDetailPage({
                   {label}
                 </button>
               ))}
+              {statusSaved && (
+                <span className="text-xs text-emerald-300">✓ 保存しました</span>
+              )}
             </div>
           </section>
 
@@ -214,17 +267,19 @@ export default function SessionDetailPage({
               placeholder="シナリオメモ、進行状況など"
               className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
             />
-            {notesDirty && (
-              <button
-                onClick={async () => {
-                  await update({ notes });
-                  setNotesDirty(false);
-                }}
-                className="rounded bg-emerald-600 px-4 py-1.5 text-sm font-semibold hover:bg-emerald-500"
-              >
-                メモを保存
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {notesDirty && (
+                <button
+                  onClick={saveNotes}
+                  className="rounded bg-emerald-600 px-4 py-1.5 text-sm font-semibold hover:bg-emerald-500"
+                >
+                  メモを保存
+                </button>
+              )}
+              {notesSaved && (
+                <span className="text-sm text-emerald-300">✓ 保存しました</span>
+              )}
+            </div>
           </section>
         </div>
 
@@ -254,7 +309,12 @@ export default function SessionDetailPage({
                     )}
                   </Link>
                   <button
-                    onClick={() => removeCharacter(sc.character.id)}
+                    onClick={() =>
+                      setRemoveTarget({
+                        id: sc.character.id,
+                        name: sc.character.name,
+                      })
+                    }
                     className="text-xs text-zinc-600 hover:text-red-400"
                   >
                     外す
@@ -325,6 +385,24 @@ export default function SessionDetailPage({
           {error}
         </p>
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteSession}
+        title={`「${session.title}」を削除しますか?`}
+        confirmLabel="削除する"
+        danger
+        onConfirm={removeSession}
+        onCancel={() => setConfirmDeleteSession(false)}
+      />
+      <ConfirmDialog
+        open={removeTarget !== null}
+        title={`${removeTarget?.name ?? ""} を参加者から外しますか?`}
+        message="探索者データ自体は削除されません。"
+        confirmLabel="外す"
+        danger
+        onConfirm={removeCharacter}
+        onCancel={() => setRemoveTarget(null)}
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { characterInputSchema } from "@/lib/coc6/types";
+import { deriveStatsFor } from "@/lib/coc";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -29,6 +30,19 @@ export async function PUT(req: NextRequest, { params }: Params) {
     );
   }
   const d = parsed.data;
+  // 現在値は派生上限を超えないようクランプする (editionは既存レコードの値を使う)
+  const existing = await prisma.character.findUnique({
+    where: { id },
+    select: { edition: true },
+  });
+  if (!existing) {
+    return NextResponse.json({ error: "探索者が見つかりません" }, { status: 404 });
+  }
+  const derived = deriveStatsFor(
+    existing.edition === "7" ? "7" : "6",
+    d,
+    d.skills["クトゥルフ神話"] ?? 0,
+  );
   try {
     const character = await prisma.character.update({
       where: { id },
@@ -49,9 +63,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
         siz: d.siz,
         int_: d.int_,
         edu: d.edu,
-        ...(d.currentHp !== undefined && { currentHp: d.currentHp }),
-        ...(d.currentMp !== undefined && { currentMp: d.currentMp }),
-        ...(d.currentSan !== undefined && { currentSan: d.currentSan }),
+        ...(d.currentHp !== undefined && { currentHp: Math.min(d.currentHp, derived.hp) }),
+        ...(d.currentMp !== undefined && { currentMp: Math.min(d.currentMp, derived.mp) }),
+        ...(d.currentSan !== undefined && {
+          currentSan: Math.min(d.currentSan, derived.maxSan),
+        }),
         skillsJson: JSON.stringify(d.skills),
         weaponsJson: JSON.stringify(d.weapons),
         memo: d.memo ?? null,

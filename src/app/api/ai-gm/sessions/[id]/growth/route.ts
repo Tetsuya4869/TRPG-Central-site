@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { collectGrowthSkills, growthCheck } from "@/lib/coc6/growth";
 import { skillBaseFor } from "@/lib/coc";
 import { skillsSchema, type StatBlock } from "@/lib/coc6/types";
-import type { Character, DiceRoll } from "@prisma/client";
+import type { Character, DiceRoll, Prisma } from "@prisma/client";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -84,22 +84,21 @@ export async function POST(_req: NextRequest, { params }: Params) {
   }
 
   const members = [];
+  const rollRecords: Prisma.DiceRollCreateManyInput[] = [];
   for (const member of loaded.memberCandidates) {
     const results = [];
     for (const candidate of member.candidates) {
       const result = growthCheck(candidate.currentValue);
-      await prisma.diceRoll.create({
-        data: {
-          expression: "1d100",
-          rolls: JSON.stringify([result.roll]),
-          total: result.roll,
-          target: candidate.currentValue,
-          context: `成長チェック: ${candidate.skillName}${result.improved ? ` (+${result.gain})` : ""}`,
-          characterId: member.characterId,
-          characterName: member.name,
-          source: "MANUAL",
-          aiGmSessionId: id,
-        },
+      rollRecords.push({
+        expression: "1d100",
+        rolls: JSON.stringify([result.roll]),
+        total: result.roll,
+        target: candidate.currentValue,
+        context: `成長チェック: ${candidate.skillName}${result.improved ? ` (+${result.gain})` : ""}`,
+        characterId: member.characterId,
+        characterName: member.name,
+        source: "MANUAL",
+        aiGmSessionId: id,
       });
       results.push({
         skillName: candidate.skillName,
@@ -108,6 +107,10 @@ export async function POST(_req: NextRequest, { params }: Params) {
       });
     }
     members.push({ characterId: member.characterId, name: member.name, results });
+  }
+  // 途中失敗で一部ロールだけ記録される事態を避けるため一括保存
+  if (rollRecords.length > 0) {
+    await prisma.diceRoll.createMany({ data: rollRecords });
   }
 
   return NextResponse.json({ members });

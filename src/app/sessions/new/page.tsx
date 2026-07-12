@@ -20,10 +20,11 @@ export default function NewSessionPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    // 失敗時は空配列にフォールバック (紐付けセレクトを出さないだけで作成は可能)
     fetch("/api/scenarios")
-      .then((res) => res.json())
-      .then(setScenarios)
-      .catch(() => {});
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setScenarios(Array.isArray(data) ? data : []))
+      .catch(() => setScenarios([]));
   }, []);
 
   async function save() {

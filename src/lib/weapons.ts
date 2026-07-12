@@ -7,12 +7,18 @@ import { parseExpression } from "@/lib/dice";
 export function resolveDamageExpression(damage: string, damageBonus: string): string {
   const db = damageBonus.trim().replace("±", "+");
   const isZero = /^[+-]?0$/.test(db) || db === "";
-  const resolved = damage.replace(/\+?\s*DB/i, () => {
-    if (isZero) return "";
-    // "+1d4" / "-2" のように符号付きで連結する (符号なしなら+扱い)
-    return /^[+-]/.test(db) ? db : `+${db}`;
-  });
-  return resolved.replace(/\s+/g, "");
+  const hadDb = /DB/i.test(damage);
+  const resolved = damage
+    .replace(/\+?\s*DB/gi, () => {
+      if (isZero) return "";
+      // "+1d4" / "-2" のように符号付きで連結する (符号なしなら+扱い)
+      return /^[+-]/.test(db) ? db : `+${db}`;
+    })
+    .replace(/\s+/g, "");
+  // "DB" 単体がDB±0/-2等でダイス項なしに解決された場合のフォールバック
+  // (rollDice("")の例外を防ぐ)。DBを含まない式には適用しない。
+  if (hadDb && (resolved === "" || /^[+-]?\d+$/.test(resolved))) return "1d3";
+  return resolved;
 }
 
 // ダメージ式として妥当か (DBを仮に+1d4として解決してパースが通るか)

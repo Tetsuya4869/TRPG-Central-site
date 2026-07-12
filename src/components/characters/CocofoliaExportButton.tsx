@@ -4,14 +4,16 @@ import { useState } from "react";
 
 export function CocofoliaExportButton({ json }: { json: string }) {
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState("");
 
   async function copy() {
+    setError("");
     try {
       await navigator.clipboard.writeText(json);
       setCopied(true);
       setTimeout(() => setCopied(false), 4000);
     } catch {
-      alert("クリップボードへのコピーに失敗しました");
+      setError("クリップボードへのコピーに失敗しました");
     }
   }
 
@@ -29,6 +31,7 @@ export function CocofoliaExportButton({ json }: { json: string }) {
           ココフォリアの盤面で Ctrl+V (⌘+V) すると駒が作成されます
         </p>
       )}
+      {error && <p className="mt-1 text-xs text-red-300">{error}</p>}
     </div>
   );
 }

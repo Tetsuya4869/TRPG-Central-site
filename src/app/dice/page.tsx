@@ -63,9 +63,10 @@ export default function DicePage() {
 
   useEffect(() => {
     fetchHistory();
+    // 失敗時は空配列のまま (探索者判定セクションを出さないだけ)
     fetch("/api/characters")
-      .then((res) => res.json())
-      .then(setCharacters)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setCharacters(Array.isArray(data) ? data : []))
       .catch(() => {});
   }, [fetchHistory]);
 
@@ -419,7 +420,16 @@ export default function DicePage() {
               </p>
               <p className="text-4xl font-bold text-emerald-300">{latest.total}</p>
               <p className="text-xs text-zinc-500">
-                出目: {JSON.parse(latest.rolls).join(", ")}
+                出目:{" "}
+                {(() => {
+                  // 壊れたJSONでも画面全体を落とさない
+                  try {
+                    const rolls = JSON.parse(latest.rolls);
+                    return Array.isArray(rolls) ? rolls.join(", ") : "?";
+                  } catch {
+                    return "?";
+                  }
+                })()}
               </p>
               <OutcomeBadge outcome={latest.outcome} />
             </section>

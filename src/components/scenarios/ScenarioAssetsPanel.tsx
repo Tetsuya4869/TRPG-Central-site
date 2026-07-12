@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 export interface ScenarioAssetRecord {
   id: string;
@@ -28,6 +29,9 @@ export function ScenarioAssetsPanel({
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // 削除確認待ちの資料 (nullでなければダイアログ表示)
+  const [deleteTarget, setDeleteTarget] = useState<ScenarioAssetRecord | null>(null);
+  const [deleteError, setDeleteError] = useState("");
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/scenarios/${scenarioId}/assets`);
@@ -90,10 +94,15 @@ export function ScenarioAssetsPanel({
   }
 
   async function remove(asset: ScenarioAssetRecord) {
-    if (!confirm(`「${asset.name}」を削除しますか?`)) return;
-    await fetch(`/api/scenarios/${scenarioId}/assets/${asset.id}`, {
+    setDeleteTarget(null);
+    setDeleteError("");
+    const res = await fetch(`/api/scenarios/${scenarioId}/assets/${asset.id}`, {
       method: "DELETE",
     });
+    if (!res.ok) {
+      setDeleteError(`「${asset.name}」の削除に失敗しました`);
+      return;
+    }
     await load();
   }
 
@@ -207,8 +216,9 @@ export function ScenarioAssetsPanel({
                   <button
                     onClick={(e) => {
                       e.preventDefault();
-                      remove(asset);
+                      setDeleteTarget(asset);
                     }}
+                    aria-label="削除"
                     className="ml-auto text-xs text-zinc-600 hover:text-red-400"
                   >
                     削除
@@ -232,6 +242,20 @@ export function ScenarioAssetsPanel({
           ))}
         </div>
       )}
+
+      {deleteError && <p className="text-xs text-red-300">{deleteError}</p>}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={`「${deleteTarget?.name ?? ""}」を削除しますか?`}
+        message="この操作は取り消せません。"
+        confirmLabel="削除する"
+        danger
+        onConfirm={() => {
+          if (deleteTarget) remove(deleteTarget);
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </section>
   );
 }

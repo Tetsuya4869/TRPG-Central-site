@@ -1,5 +1,11 @@
-import { describe, it, expect } from "vitest";
-import { resolveMember, type MemberContext } from "./tools";
+import { describe, it, expect, vi } from "vitest";
+
+// executeGmToolのDB書き込みはモック (テストは判定ロジックとペイロードの検証に集中する)
+vi.mock("@/lib/prisma", () => ({
+  prisma: { diceRoll: { create: vi.fn().mockResolvedValue({}) } },
+}));
+
+import { resolveMember, executeGmTool, type MemberContext, type GmToolContext } from "./tools";
 
 const state = { hp: 10, maxHp: 10, mp: 10, maxMp: 10, san: 50, maxSan: 99 };
 const members: MemberContext[] = [
@@ -30,5 +36,66 @@ describe("resolveMember (名前解決3段フォールバック)", () => {
   it("複数人で名前なし/不明は解決しない", () => {
     expect(resolveMember(members, undefined)).toBeNull();
     expect(resolveMember(members, "存在しない人")).toBeNull();
+  });
+});
+
+describe("executeGmTool", () => {
+  const ctx: GmToolContext = { aiGmSessionId: "s1", edition: "6", members };
+
+  it("request_skill_check: target_value=0 は50に化けず1にクランプされる (回帰テスト)", async () => {
+    const result = await executeGmTool(
+      "request_skill_check",
+      { character_name: "花子", skill_name: "クトゥルフ神話", target_value: 0, reason: "" },
+      ctx,
+    );
+    const payload = JSON.parse(result.resultForModel);
+    expect(payload.target).toBe(1); // Math.max(1, 0)。50ではない
+  });
+
+  it("request_skill_check: target_value欠落時のみ50へフォールバック", async () => {
+    const result = await executeGmTool(
+      "request_skill_check",
+      { character_name: "花子", skill_name: "目星", reason: "" },
+      ctx,
+    );
+    expect(JSON.parse(result.resultForModel).target).toBe(50);
+  });
+
+  it("san_check: 状態を更新しnewMemberStateを返す", async () => {
+    const result = await executeGmTool(
+      "san_check",
+      { character_name: "花子", loss_on_success: "0", loss_on_failure: "1d4", reason: "" },
+      ctx,
+    );
+    const payload = JSON.parse(result.resultForModel);
+    expect(payload.san_before).toBe(50);
+    expect(payload.san_after).toBeLessThanOrEqual(50);
+    expect(result.newMemberState?.memberId).toBe("m2");
+    expect(result.newMemberState?.state.san).toBe(payload.san_after);
+  });
+
+  it("madness_roll: 狂気表の結果を返す", async () => {
+    const result = await executeGmTool(
+      "madness_roll",
+      { character_name: "田中太郎", reason: "テスト" },
+      ctx,
+    );
+    const payload = JSON.parse(result.resultForModel);
+    expect(payload.tool).toBe("madness_roll");
+    expect(payload.roll).toBeGreaterThanOrEqual(1);
+    expect(payload.roll).toBeLessThanOrEqual(10);
+    expect(payload.title.length).toBeGreaterThan(0);
+    expect(result.isError).toBeUndefined();
+  });
+
+  it("不明な探索者名は is_error で有効名一覧を返す", async () => {
+    const result = await executeGmTool(
+      "request_skill_check",
+      { character_name: "誰そ彼", skill_name: "目星", target_value: 60, reason: "" },
+      ctx,
+    );
+    expect(result.isError).toBe(true);
+    expect(result.resultForModel).toContain("田中太郎");
+    expect(result.resultForModel).toContain("花子");
   });
 });

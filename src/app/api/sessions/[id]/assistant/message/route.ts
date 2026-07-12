@@ -2,8 +2,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import type Anthropic from "@anthropic-ai/sdk";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { hasApiKey } from "@/lib/ai-gm/client";
+import { mergeConsecutiveUserTurns } from "@/lib/ai-gm/history";
 import { runKpTurn } from "@/lib/ai-kp/assistant";
 import type { SseEvent } from "@/lib/ai-gm/loop";
 
@@ -64,14 +66,24 @@ export async function POST(req: NextRequest, { params }: Params) {
     { type: "text", text: parsed.data.message },
   ];
   let nextSeq = (session.kpMessages.at(-1)?.seq ?? -1) + 1;
-  await prisma.sessionChatMessage.create({
-    data: {
-      gameSessionId: session.id,
-      role: "user",
-      contentJson: JSON.stringify(userContent),
-      seq: nextSeq,
-    },
-  });
+  try {
+    await prisma.sessionChatMessage.create({
+      data: {
+        gameSessionId: session.id,
+        role: "user",
+        contentJson: JSON.stringify(userContent),
+        seq: nextSeq,
+      },
+    });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      return NextResponse.json(
+        { error: "他の送信を処理中です。少し待って再送してください" },
+        { status: 409 },
+      );
+    }
+    throw e;
+  }
   history.push({ role: "user", content: userContent });
   nextSeq += 1;
 
@@ -94,7 +106,12 @@ export async function POST(req: NextRequest, { params }: Params) {
         }
       };
       try {
-        await runKpTurn({ ctx, history, nextSeq, emit });
+        await runKpTurn({
+          ctx,
+          history: mergeConsecutiveUserTurns(history),
+          nextSeq,
+          emit,
+        });
       } catch (e) {
         const message =
           e instanceof Error ? e.message : "AI KP補佐の応答中にエラーが発生しました";

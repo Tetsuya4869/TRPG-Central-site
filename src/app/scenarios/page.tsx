@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 interface ScenarioRecord {
   id: string;
@@ -18,11 +19,24 @@ export default function ScenariosPage() {
   const [query, setQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<"" | "MANUAL" | "AI_GENERATED">("");
   const [tagFilter, setTagFilter] = useState("");
+  // 読み込みエラーは「まだシナリオがありません」と区別して表示する
+  const [loadError, setLoadError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  // 削除確認ダイアログの対象シナリオ
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
 
   async function load() {
-    const res = await fetch("/api/scenarios");
-    if (res.ok) setScenarios(await res.json());
-    setLoading(false);
+    try {
+      const res = await fetch("/api/scenarios");
+      if (!res.ok) throw new Error("load failed");
+      const data = await res.json();
+      setScenarios(Array.isArray(data) ? data : []);
+      setLoadError("");
+    } catch {
+      setLoadError("読み込みに失敗しました。再読み込みしてください");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -52,12 +66,21 @@ export default function ScenariosPage() {
     });
   }, [scenarios, query, sourceFilter, tagFilter]);
 
-  async function remove(id: string, title: string) {
-    if (!confirm(`「${title}」を削除しますか? (使用中のセッションには影響しません)`))
-      return;
-    const res = await fetch(`/api/scenarios/${id}`, { method: "DELETE" });
-    if (res.ok) await load();
-    else alert("削除に失敗しました");
+  async function remove() {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    setDeleteTarget(null);
+    setDeleteError("");
+    try {
+      const res = await fetch(`/api/scenarios/${target.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        setDeleteError("削除に失敗しました");
+        return;
+      }
+      await load();
+    } catch {
+      setDeleteError("通信エラーが発生しました");
+    }
   }
 
   return (
@@ -120,8 +143,18 @@ export default function ScenariosPage() {
         </div>
       )}
 
+      {deleteError && (
+        <p className="rounded border border-red-800 bg-red-950/50 px-4 py-2 text-sm text-red-300">
+          {deleteError}
+        </p>
+      )}
+
       {loading ? (
         <p className="text-zinc-500">読み込み中…</p>
+      ) : loadError ? (
+        <p className="rounded border border-red-800 bg-red-950/50 px-4 py-3 text-sm text-red-300">
+          {loadError}
+        </p>
       ) : scenarios.length === 0 ? (
         <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-10 text-center text-zinc-500">
           <p className="mb-4">まだシナリオがありません</p>
@@ -166,7 +199,7 @@ export default function ScenariosPage() {
                 )}
               </Link>
               <button
-                onClick={() => remove(s.id, s.title)}
+                onClick={() => setDeleteTarget({ id: s.id, title: s.title })}
                 className="ml-4 text-xs text-zinc-600 hover:text-red-400"
               >
                 削除
@@ -175,6 +208,16 @@ export default function ScenariosPage() {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={`「${deleteTarget?.title ?? ""}」を削除しますか?`}
+        message="使用中のセッションには影響しません。"
+        confirmLabel="削除する"
+        danger
+        onConfirm={remove}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

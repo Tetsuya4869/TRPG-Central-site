@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ScenarioGeneratorPanel } from "@/components/scenarios/ScenarioGeneratorPanel";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 interface ScenarioSummary {
   id: string;
@@ -49,31 +50,47 @@ export default function AiGmPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  // 一覧の読み込み・削除エラー (フォーム内エラーとは別枠で表示)
+  const [listError, setListError] = useState("");
+  // 削除確認ダイアログの対象セッション
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
 
   const load = useCallback(async () => {
-    const [sRes, cRes, scRes] = await Promise.all([
-      fetch("/api/ai-gm/sessions"),
-      fetch("/api/characters"),
-      fetch("/api/scenarios"),
-    ]);
-    const sData = await sRes.json();
-    setSessions(sData.sessions);
-    setApiKeyConfigured(sData.apiKeyConfigured);
-    setCharacters(await cRes.json());
-    const scenarioList: ScenarioSummary[] = await scRes.json();
-    setScenarios(scenarioList);
-    // /scenarios/[id] の「このシナリオでAI GMプレイ」リンクからの遷移に対応
-    const preselect = new URLSearchParams(window.location.search).get("scenarioId");
-    if (preselect) {
-      const found = scenarioList.find((sc) => sc.id === preselect);
-      if (found) {
-        setScenarioId(found.id);
-        setScenario(found.content);
-        setTitle((prev) => prev || found.title);
-        setShowForm(true);
+    setListError("");
+    try {
+      const [sRes, cRes, scRes] = await Promise.all([
+        fetch("/api/ai-gm/sessions"),
+        fetch("/api/characters"),
+        fetch("/api/scenarios"),
+      ]);
+      if (!sRes.ok || !cRes.ok || !scRes.ok) throw new Error("load failed");
+      const sData = await sRes.json();
+      setSessions(Array.isArray(sData.sessions) ? sData.sessions : []);
+      setApiKeyConfigured(sData.apiKeyConfigured);
+      const characterList = await cRes.json();
+      setCharacters(Array.isArray(characterList) ? characterList : []);
+      const scenarioList: ScenarioSummary[] = await scRes.json();
+      setScenarios(Array.isArray(scenarioList) ? scenarioList : []);
+      // /scenarios/[id] の「このシナリオでAI GMプレイ」リンクからの遷移に対応
+      const preselect = new URLSearchParams(window.location.search).get("scenarioId");
+      if (preselect && Array.isArray(scenarioList)) {
+        const found = scenarioList.find((sc) => sc.id === preselect);
+        if (found) {
+          setScenarioId(found.id);
+          setScenario(found.content);
+          setTitle((prev) => prev || found.title);
+          setShowForm(true);
+        }
       }
+    } catch {
+      // 読み込み失敗時は空一覧にフォールバックしてエラーを表示
+      setSessions([]);
+      setCharacters([]);
+      setScenarios([]);
+      setListError("読み込みに失敗しました。再読み込みしてください");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -153,10 +170,23 @@ export default function AiGmPage() {
     }
   }
 
-  async function remove(id: string, sessionTitle: string) {
-    if (!confirm(`「${sessionTitle}」を削除しますか? プレイログも削除されます。`)) return;
-    await fetch(`/api/ai-gm/sessions/${id}`, { method: "DELETE" });
-    await load();
+  async function remove() {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    setDeleteTarget(null);
+    setListError("");
+    try {
+      const res = await fetch(`/api/ai-gm/sessions/${target.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        setListError("削除に失敗しました");
+        return;
+      }
+      await load();
+    } catch {
+      setListError("通信エラーが発生しました");
+    }
   }
 
   if (loading) return <p className="text-zinc-500">読み込み中…</p>;
@@ -333,6 +363,12 @@ export default function AiGmPage() {
         </section>
       )}
 
+      {listError && (
+        <p className="rounded border border-red-800 bg-red-950/50 px-4 py-2 text-sm text-red-300">
+          {listError}
+        </p>
+      )}
+
       {sessions.length === 0 ? (
         <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-10 text-center text-zinc-500">
           まだAI GMセッションがありません
@@ -384,7 +420,7 @@ export default function AiGmPage() {
                 </span>
               </Link>
               <button
-                onClick={() => remove(s.id, s.title)}
+                onClick={() => setDeleteTarget({ id: s.id, title: s.title })}
                 className="text-xs text-zinc-600 hover:text-red-400 ml-4"
               >
                 削除
@@ -393,6 +429,16 @@ export default function AiGmPage() {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={`「${deleteTarget?.title ?? ""}」を削除しますか?`}
+        message="プレイログも削除されます。"
+        confirmLabel="削除する"
+        danger
+        onConfirm={remove}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

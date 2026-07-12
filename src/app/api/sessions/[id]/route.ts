@@ -52,13 +52,22 @@ export async function PUT(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "戦闘状態が不正です" }, { status: 400 });
     }
   }
+  // 存在しないscenarioIdはFK違反(誤った404)にせず、POSTと同じく黙ってnull化する
+  let scenarioId = d.scenarioId;
+  if (scenarioId) {
+    const scenario = await prisma.scenario.findUnique({
+      where: { id: scenarioId },
+      select: { id: true },
+    });
+    if (!scenario) scenarioId = null;
+  }
   try {
     const session = await prisma.gameSession.update({
       where: { id },
       data: {
         ...(d.title !== undefined && { title: d.title }),
         ...(d.scenarioName !== undefined && { scenarioName: d.scenarioName }),
-        ...(d.scenarioId !== undefined && { scenarioId: d.scenarioId }),
+        ...(d.scenarioId !== undefined && { scenarioId }),
         ...(d.scheduledAt !== undefined && {
           scheduledAt: d.scheduledAt ? new Date(d.scheduledAt) : null,
         }),

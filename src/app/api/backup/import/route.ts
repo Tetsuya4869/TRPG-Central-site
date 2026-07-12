@@ -107,11 +107,14 @@ export async function POST(req: NextRequest) {
       prisma.diceRoll.createMany({ data: data.diceRolls as any }),
     ]);
   } catch (e) {
-    // トランザクションなので失敗時は元のデータが残る
-    const message =
-      e instanceof Error ? e.message : "復元に失敗しました";
+    // トランザクションなので失敗時は元のデータが残る。
+    // DB内部情報 (列名・制約名) を含む生のエラーはログのみに出す
+    console.error("バックアップ復元に失敗:", e);
     return NextResponse.json(
-      { error: `復元に失敗しました (データは変更されていません): ${message}` },
+      {
+        error:
+          "復元に失敗しました (データは変更されていません)。バックアップファイルの内容がスキーマと一致しない可能性があります",
+      },
       { status: 400 },
     );
   }

@@ -78,7 +78,8 @@ export const SKILL_DEFS: SkillDef[] = [
 
 export function skillBase(def: SkillDef, stats: StatBlock): number {
   if (def.base === "DEX*2") return stats.dex * 2;
-  if (def.base === "EDU*5") return stats.edu * 5;
+  // EDU最大21 → 105。skillsSchemaの上限(100)と1d100判定に収まるよう99にクランプ
+  if (def.base === "EDU*5") return Math.min(99, stats.edu * 5);
   return def.base;
 }
 

@@ -229,7 +229,9 @@ export async function executeGmTool(
       const member = resolveMember(ctx.members, input.character_name);
       if (!member) return unknownMemberResult(ctx.members, input.character_name);
       const skillName = String(input.skill_name ?? "判定");
-      const target = Math.max(1, Math.min(100, Number(input.target_value) || 50));
+      // 0はクトゥルフ神話等の正当な目標値。非数のみ50にフォールバックする (0 || 50 は不可)
+      const rawTarget = Number(input.target_value);
+      const target = Math.max(1, Math.min(100, Number.isFinite(rawTarget) ? rawTarget : 50));
       const reason = String(input.reason ?? "");
       const bonus = Math.max(0, Math.min(2, Number(input.bonus_dice) || 0));
       const penalty = Math.max(0, Math.min(2, Number(input.penalty_dice) || 0));

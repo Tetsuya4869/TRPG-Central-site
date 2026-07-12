@@ -44,9 +44,10 @@ export async function POST(req: NextRequest) {
       siz: d.siz,
       int_: d.int_,
       edu: d.edu,
-      currentHp: d.currentHp ?? derived.hp,
-      currentMp: d.currentMp ?? derived.mp,
-      currentSan: d.currentSan ?? derived.san, // 7版は初期SAN=POW
+      // 現在値は派生上限を超えないようクランプする
+      currentHp: Math.min(d.currentHp ?? derived.hp, derived.hp),
+      currentMp: Math.min(d.currentMp ?? derived.mp, derived.mp),
+      currentSan: Math.min(d.currentSan ?? derived.san, derived.maxSan), // 7版は初期SAN=POW
 
       skillsJson: JSON.stringify(d.skills),
       weaponsJson: JSON.stringify(d.weapons),

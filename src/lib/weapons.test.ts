@@ -25,6 +25,11 @@ describe("resolveDamageExpression", () => {
   it("DBなしの式はそのまま", () => {
     expect(resolveDamageExpression("2d6+1", "+1d4")).toBe("2d6+1");
   });
+  it("DB単体がDB±0で空になる場合は1d3にフォールバック (rollDice例外の回帰テスト)", () => {
+    expect(resolveDamageExpression("DB", "±0")).toBe("1d3");
+    expect(resolveDamageExpression("DB", "-2")).toBe("1d3"); // 定数のみもダイス項なし
+    expect(resolveDamageExpression("DB", "+1d4")).toBe("+1d4");
+  });
 });
 
 describe("isValidDamageExpression / weaponSchema", () => {

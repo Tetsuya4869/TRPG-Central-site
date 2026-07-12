@@ -40,8 +40,11 @@ export async function POST(req: NextRequest) {
     const result = await generateScenario(parsed.data);
     return NextResponse.json(result);
   } catch (e) {
-    const message =
-      e instanceof Error ? e.message : "シナリオ生成中にエラーが発生しました";
-    return NextResponse.json({ error: message }, { status: 502 });
+    // 上流(Anthropic)の生エラーはログのみに出し、クライアントには定型文を返す
+    console.error("シナリオ生成に失敗:", e);
+    return NextResponse.json(
+      { error: "シナリオ生成中にエラーが発生しました。時間をおいて再試行してください" },
+      { status: 502 },
+    );
   }
 }

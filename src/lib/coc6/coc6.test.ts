@@ -125,6 +125,16 @@ describe("growthCheck", () => {
     const r = growthCheck(95, seqRng(0.999, 0.999));
     expect(r.after).toBe(99);
   });
+  it("現在値100は成長失敗でも値が下がらない (境界バグ回帰テスト)", () => {
+    // roll > 100 は決して成立しない → improved false、after は100のまま
+    const r = growthCheck(100, seqRng(0.999));
+    expect(r.improved).toBe(false);
+    expect(r.after).toBe(100);
+  });
+  it("現在値99超 (母国語EDU×5等) も維持される", () => {
+    const r = growthCheck(105, seqRng(0.5));
+    expect(r.after).toBe(105);
+  });
 });
 
 describe("collectGrowthSkills", () => {

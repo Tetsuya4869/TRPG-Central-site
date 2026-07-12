@@ -42,6 +42,7 @@ export function sanCheck(
   rng: Rng = Math.random,
 ): SanCheckResult {
   const roll = rollDie(100, rng);
+  // 簡略化: roll ≦ 現在SAN で成功 (公式の「00は常に失敗」は採用しない。SAN≧100は実運用上ほぼ無い)
   const success = roll <= currentSan;
   const lossExpression = success ? lossOnSuccess : lossOnFailure;
   const loss = rollLoss(lossExpression, rng);

@@ -2,8 +2,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import type Anthropic from "@anthropic-ai/sdk";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { hasApiKey } from "@/lib/ai-gm/client";
+import { mergeConsecutiveUserTurns } from "@/lib/ai-gm/history";
 import { runGmTurn, type SseEvent } from "@/lib/ai-gm/loop";
 
 export const runtime = "nodejs";
@@ -73,14 +75,25 @@ export async function POST(req: NextRequest, { params }: Params) {
     { type: "text", text: parsed.data.message },
   ];
   let nextSeq = (session.messages.at(-1)?.seq ?? -1) + 1;
-  await prisma.chatMessage.create({
-    data: {
-      aiGmSessionId: session.id,
-      role: "user",
-      contentJson: JSON.stringify(userContent),
-      seq: nextSeq,
-    },
-  });
+  try {
+    await prisma.chatMessage.create({
+      data: {
+        aiGmSessionId: session.id,
+        role: "user",
+        contentJson: JSON.stringify(userContent),
+        seq: nextSeq,
+      },
+    });
+  } catch (e) {
+    // 同時POSTでseqが衝突した場合 (unique制約違反) は409で明示的に拒否
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      return NextResponse.json(
+        { error: "他の送信を処理中です。少し待って再送してください" },
+        { status: 409 },
+      );
+    }
+    throw e;
+  }
   history.push({ role: "user", content: userContent });
   nextSeq += 1;
 
@@ -99,7 +112,13 @@ export async function POST(req: NextRequest, { params }: Params) {
         }
       };
       try {
-        await runGmTurn({ session, history, nextSeq, emit });
+        // 失敗ターンの残骸でuserロールが連続していてもAPIに弾かれないよう結合する
+        await runGmTurn({
+          session,
+          history: mergeConsecutiveUserTurns(history),
+          nextSeq,
+          emit,
+        });
       } catch (e) {
         const message =
           e instanceof Error ? e.message : "AI GMの応答中にエラーが発生しました";

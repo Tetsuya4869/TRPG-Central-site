@@ -5,6 +5,7 @@ import Link from "next/link";
 import { OutcomeBadge } from "@/components/dice/OutcomeBadge";
 import { GrowthCheckModal } from "@/components/ai-gm/GrowthCheckModal";
 import { SessionStats } from "@/components/ai-gm/SessionStats";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 interface DisplayMessage {
   kind: "user" | "assistant" | "tool";
@@ -157,11 +158,15 @@ export default function AiGmPlayPage({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [showGrowthModal, setShowGrowthModal] = useState(false);
+  // セッション終了の確認ダイアログ
+  const [confirmFinish, setConfirmFinish] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(false);
   // 送信ループのクロージャ内から最新のトグル状態を読むためのref
   const ttsRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // 進行中ストリームの中断用 (アンマウント時・再送時)
+  const abortRef = useRef<AbortController | null>(null);
 
   const ttsSupported =
     typeof window !== "undefined" && "speechSynthesis" in window;
@@ -173,7 +178,9 @@ export default function AiGmPlayPage({
     if (!next && ttsSupported) window.speechSynthesis.cancel();
   }
 
-  // キーパーの語りを読み上げる (対応ブラウザのみ)
+  // キーパーの語りを読み上げる (対応ブラウザのみ)。
+  // getVoices()は初回同期呼び出しで空を返すことがあるため、lang指定を主とし
+  // 見つかった場合のみvoiceを明示する (voiceschangedはブラウザ差が大きい)。
   function speak(text: string) {
     if (!ttsRef.current || !ttsSupported) return;
     const utterance = new SpeechSynthesisUtterance(text);
@@ -186,23 +193,33 @@ export default function AiGmPlayPage({
   }
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/ai-gm/sessions/${id}`);
-    if (!res.ok) {
+    try {
+      const res = await fetch(`/api/ai-gm/sessions/${id}`);
+      if (!res.ok) return;
+      const data: SessionDetail = await res.json();
+      setSession(data);
+      setMessages(data.messages);
+      setMemberStates(
+        Object.fromEntries(data.members.map((m) => [m.characterId, m.state])),
+      );
+    } catch {
+      // 通信エラー時はsession=nullのまま「見つかりません」表示にフォールバック
+    } finally {
       setLoading(false);
-      return;
     }
-    const data: SessionDetail = await res.json();
-    setSession(data);
-    setMessages(data.messages);
-    setMemberStates(
-      Object.fromEntries(data.members.map((m) => [m.characterId, m.state])),
-    );
-    setLoading(false);
   }, [id]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // アンマウント時: 進行中ストリームの中断と読み上げの停止
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    };
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -216,16 +233,37 @@ export default function AiGmPlayPage({
     setError("");
     setMessages((prev) => [...prev, { kind: "user", text: message }]);
 
+    // 受信済みテキストはtry/catch双方から到達できる位置に置く
+    // (切断時にも部分応答を保全するため)
+    let currentText = "";
+    const flushText = () => {
+      if (currentText) {
+        const finished = currentText;
+        setMessages((prev) => [...prev, { kind: "assistant", text: finished }]);
+        speak(finished);
+        currentText = "";
+        setStreamingText("");
+      }
+    };
+
+    abortRef.current?.abort();
+    const abort = new AbortController();
+    abortRef.current = abort;
+
     try {
       const res = await fetch(`/api/ai-gm/sessions/${id}/message`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message }),
+        signal: abort.signal,
       });
 
       if (!res.ok || !res.body) {
         const data = await res.json().catch(() => ({}));
         setError(data.error ?? "送信に失敗しました");
+        // ストリーム開始前の失敗: 楽観追加した発言を差し戻して再送しやすくする
+        setMessages((prev) => prev.slice(0, -1));
+        setInput(message);
         setBusy(false);
         return;
       }
@@ -233,23 +271,12 @@ export default function AiGmPlayPage({
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      let currentText = "";
-
-      const flushText = () => {
-        if (currentText) {
-          const finished = currentText;
-          setMessages((prev) => [...prev, { kind: "assistant", text: finished }]);
-          speak(finished);
-          currentText = "";
-          setStreamingText("");
-        }
-      };
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n\n");
+        const parts = buffer.split(/\r?\n\r?\n/);
         buffer = parts.pop() ?? "";
         for (const part of parts) {
           const line = part.trim();
@@ -292,8 +319,12 @@ export default function AiGmPlayPage({
         }
       }
       flushText();
-    } catch {
-      setError("通信エラーが発生しました。再送信してください。");
+    } catch (e) {
+      // 切断時も受信済みの部分応答は保全する
+      flushText();
+      if (!(e instanceof DOMException && e.name === "AbortError")) {
+        setError("通信エラーが発生しました。再送信してください。");
+      }
     } finally {
       setStreamingText("");
       setBusy(false);
@@ -301,7 +332,7 @@ export default function AiGmPlayPage({
   }
 
   async function finishSession() {
-    if (!confirm("セッションを終了しますか? 終了後に技能成長チェックができます。")) return;
+    setConfirmFinish(false);
     await fetch(`/api/ai-gm/sessions/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -334,7 +365,7 @@ export default function AiGmPlayPage({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_16rem] gap-6">
       {/* メイン: チャット */}
-      <div className="flex flex-col h-[calc(100vh-12rem)]">
+      <div className="flex flex-col h-[calc(100dvh-12rem)]">
         <div className="flex items-center justify-between mb-3">
           <div>
             <h1 className="text-xl font-bold">{session.title}</h1>
@@ -378,7 +409,7 @@ export default function AiGmPlayPage({
             )}
             {session.status === "ONGOING" ? (
               <button
-                onClick={finishSession}
+                onClick={() => setConfirmFinish(true)}
                 className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 hover:border-zinc-500"
               >
                 セッションを終了
@@ -412,7 +443,10 @@ export default function AiGmPlayPage({
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950/70 p-4 space-y-4">
+        <div
+          className="flex-1 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950/70 p-4 space-y-4"
+          aria-live="polite"
+        >
           {messages.length === 0 && !streamingText && (
             <div className="text-center text-zinc-500 py-10 space-y-3">
               <p>セッション開始の準備ができました。</p>
@@ -580,6 +614,15 @@ export default function AiGmPlayPage({
           ← セッション一覧へ
         </Link>
       </aside>
+
+      <ConfirmDialog
+        open={confirmFinish}
+        title="セッションを終了しますか?"
+        message="終了後に技能成長チェックができます。"
+        confirmLabel="終了する"
+        onConfirm={finishSession}
+        onCancel={() => setConfirmFinish(false)}
+      />
 
       {showGrowthModal && (
         <GrowthCheckModal

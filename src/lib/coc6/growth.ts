@@ -51,6 +51,7 @@ export function growthCheck(current: number, rng: Rng = Math.random): GrowthChec
     roll,
     improved,
     gain,
-    after: Math.min(99, current + gain),
+    // 上限99にクランプするが、既に99以上の技能を下げてはならない (母国語EDU×5等は99超がありうる)
+    after: Math.max(current, Math.min(99, current + gain)),
   };
 }

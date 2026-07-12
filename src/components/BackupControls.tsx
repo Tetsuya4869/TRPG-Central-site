@@ -2,20 +2,17 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 export function BackupControls() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  // 復元確認待ちのファイル (nullでなければダイアログ表示)
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   async function importFile(file: File) {
-    if (
-      !confirm(
-        "バックアップから復元しますか?\n\n⚠️ 現在の全データ(探索者・シナリオ・卓・プレイログ)がバックアップの内容に置き換えられます。この操作は取り消せません。",
-      )
-    )
-      return;
     setBusy(true);
     setMessage("");
     setError("");
@@ -57,7 +54,7 @@ export function BackupControls() {
             disabled={busy}
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) importFile(file);
+              if (file) setPendingFile(file);
               e.target.value = "";
             }}
           />
@@ -65,6 +62,21 @@ export function BackupControls() {
       </div>
       {message && <p className="text-xs text-emerald-300">{message}</p>}
       {error && <p className="text-xs text-red-300">{error}</p>}
+      <ConfirmDialog
+        open={pendingFile !== null}
+        title="バックアップから復元しますか?"
+        message={
+          "⚠️ 現在の全データ(探索者・シナリオ・卓・プレイログ)がバックアップの内容に置き換えられます。この操作は取り消せません。\n⚠️ 立ち絵などの画像ファイル(public/uploads)はバックアップに含まれません。"
+        }
+        confirmLabel="復元する"
+        danger
+        onConfirm={() => {
+          const file = pendingFile;
+          setPendingFile(null);
+          if (file) importFile(file);
+        }}
+        onCancel={() => setPendingFile(null)}
+      />
     </div>
   );
 }

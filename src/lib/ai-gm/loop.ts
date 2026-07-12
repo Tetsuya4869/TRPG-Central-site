@@ -79,6 +79,7 @@ export async function runGmTurn(opts: {
 
   const messages: Anthropic.MessageParam[] = [...opts.history];
   let seq = opts.nextSeq;
+  let turnCompleted = false;
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
     // Sonnet 5: temperature等は送らない(400になる)。thinkingは省略でadaptive。
@@ -116,6 +117,7 @@ export async function runGmTurn(opts: {
       (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
     );
     if (message.stop_reason !== "tool_use" || toolUses.length === 0) {
+      turnCompleted = true;
       break; // end_turn等 — ターン完了
     }
 
@@ -161,6 +163,28 @@ export async function runGmTurn(opts: {
 
     messages.push({ role: "user", content: toolResults });
     await persistMessage(session.id, "user", toolResults, seq++);
+  }
+
+  // 反復上限到達: 履歴末尾が未応答のtool_resultのまま終わらないよう、
+  // ツールなしで締めのナレーションを1回だけ生成する
+  if (!turnCompleted) {
+    const stream = client.messages.stream({
+      model: GM_MODEL,
+      max_tokens: MAX_TOKENS,
+      system: buildSystemPrompt(
+        sortedMembers.map((m, i) => ({
+          character: m.character,
+          state: memberContexts[i].state,
+        })),
+        session.scenario,
+        edition,
+      ),
+      messages,
+    });
+    stream.on("text", (delta) => emit({ type: "text_delta", text: delta }));
+    const message = await stream.finalMessage();
+    messages.push({ role: "assistant", content: message.content });
+    await persistMessage(session.id, "assistant", message.content, seq++);
   }
 
   emit({ type: "done" });
