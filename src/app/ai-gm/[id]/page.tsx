@@ -3,6 +3,7 @@
 import { use, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { OutcomeBadge } from "@/components/dice/OutcomeBadge";
+import { GrowthCheckModal } from "@/components/ai-gm/GrowthCheckModal";
 
 interface DisplayMessage {
   kind: "user" | "assistant" | "tool";
@@ -126,6 +127,7 @@ export default function AiGmPlayPage({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [showGrowthModal, setShowGrowthModal] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -232,13 +234,14 @@ export default function AiGmPlayPage({
   }
 
   async function finishSession() {
-    if (!confirm("セッションを終了しますか?")) return;
+    if (!confirm("セッションを終了しますか? 終了後に技能成長チェックができます。")) return;
     await fetch(`/api/ai-gm/sessions/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "FINISHED" }),
     });
     await load();
+    setShowGrowthModal(true);
   }
 
   if (loading) return <p className="text-zinc-500">読み込み中…</p>;
@@ -288,9 +291,17 @@ export default function AiGmPlayPage({
                 セッションを終了
               </button>
             ) : (
-              <span className="rounded border border-zinc-600 bg-zinc-800 px-3 py-1 text-xs text-zinc-400">
-                終了済み
-              </span>
+              <>
+                <button
+                  onClick={() => setShowGrowthModal(true)}
+                  className="rounded border border-emerald-800 px-3 py-1.5 text-xs text-emerald-300 hover:bg-emerald-950/50"
+                >
+                  📈 成長チェック
+                </button>
+                <span className="rounded border border-zinc-600 bg-zinc-800 px-3 py-1 text-xs text-zinc-400">
+                  終了済み
+                </span>
+              </>
             )}
           </div>
         </div>
@@ -429,6 +440,14 @@ export default function AiGmPlayPage({
           ← セッション一覧へ
         </Link>
       </aside>
+
+      {showGrowthModal && (
+        <GrowthCheckModal
+          sessionId={id}
+          onClose={() => setShowGrowthModal(false)}
+          onApplied={() => load()}
+        />
+      )}
     </div>
   );
 }
