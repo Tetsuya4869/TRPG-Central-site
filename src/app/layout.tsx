@@ -13,6 +13,7 @@ const navItems = [
   { href: "/scenarios", label: "シナリオ" },
   { href: "/dice", label: "ダイス" },
   { href: "/ai-gm", label: "AI GM" },
+  { href: "/reference", label: "早見表" },
 ];
 
 export default function RootLayout({

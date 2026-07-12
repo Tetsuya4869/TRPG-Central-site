@@ -32,6 +32,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
       currentMp: character.currentMp,
       currentSan: character.currentSan,
       skillsJson: character.skillsJson,
+      weaponsJson: character.weaponsJson,
       memo: character.memo,
     },
   });

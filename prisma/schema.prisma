@@ -31,7 +31,9 @@ model Character {
   currentMp  Int
   currentSan Int
   // { "図書館": 70, "目星": 65, ... } 技能名→現在値
-  skillsJson String   @default("{}")
+  skillsJson  String   @default("{}")
+  // Weapon[] 例 [{"name":"ナイフ","skillName":"ナイフ","damage":"1d4+DB"}] (weaponsSchemaで検証)
+  weaponsJson String   @default("[]")
   memo       String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

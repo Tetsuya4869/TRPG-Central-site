@@ -24,6 +24,7 @@ const character: Character = {
   currentMp: 14,
   currentSan: 65,
   skillsJson: "{}",
+  weaponsJson: "[]",
   memo: null,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -69,5 +70,23 @@ describe("buildCocofoliaCharacter", () => {
   it("DB +1d4 がダメージコマンドに反映される", () => {
     // STR13+SIZ15=28 → +1d4
     expect(result.data.commands).toContain("1d3+1d4 【こぶしダメージ(DB込)】");
+  });
+
+  it("登録武器は攻撃+ダメージ(DB解決済み)のコマンドになる", () => {
+    const withWeapons = buildCocofoliaCharacter({
+      ...character,
+      skillsJson: JSON.stringify({ 拳銃: 60 }),
+      weaponsJson: JSON.stringify([
+        { name: "ナイフ", skillName: "ナイフ", damage: "1d4+DB" },
+        { name: "リボルバー", skillName: "拳銃", damage: "1d10" },
+      ]),
+    });
+    const commands = withWeapons.data.commands.split("\n");
+    expect(commands).toContain("1d100<=60 【リボルバー攻撃】");
+    expect(commands).toContain("1d10 【リボルバーダメージ】");
+    // DB +1d4 が解決される
+    expect(commands).toContain("1d4+1d4 【ナイフダメージ】");
+    // 武器登録時はデフォルトのこぶし行は出さない
+    expect(withWeapons.data.commands).not.toContain("こぶしダメージ");
   });
 });

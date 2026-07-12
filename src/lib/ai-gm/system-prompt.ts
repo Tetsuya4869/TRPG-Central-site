@@ -7,6 +7,7 @@ import {
   type Edition,
 } from "@/lib/coc";
 import { skillsSchema, type AiGmState, type StatBlock } from "@/lib/coc6/types";
+import { parseWeaponsJson, resolveDamageExpression } from "@/lib/weapons";
 
 // 安定部分(全セッション共通)。cache_control でキャッシュする。
 const KEEPER_INSTRUCTIONS_6 = `あなたはクトゥルフ神話TRPG(6版)のキーパー(ゲームマスター)です。セッションを日本語で進行します。探索者が複数いる場合はパーティ全体を導き、全員に見せ場を作ってください。
@@ -29,6 +30,7 @@ const KEEPER_INSTRUCTIONS_6 = `あなたはクトゥルフ神話TRPG(6版)のキ
 - 目標値は探索者シートの技能値を使う。シートにない技能は初期値を使う。
 - 恐ろしいもの・神話的存在・死体などを目撃した場面では必ず san_check ツールを使う。減少値はシナリオの脅威度に応じて適切に設定する(軽度: 0/1d2、中度: 1/1d4+1、神話的存在: 1d10/1d100など)。
 - ダメージや偶然の決定は roll_dice ツールを使う。
+- SANチェックで一度に5以上SANを失った探索者には madness_roll ツールで狂気表をロールし、結果(症状と持続時間)に沿って発狂を演出する。
 - ツールの結果(成功/失敗/クリティカル/ファンブル)を必ず次の描写に反映する。クリティカルは劇的な成功、ファンブルは状況の悪化として演出する。
 - 判定の乱発は避ける。物語が進む場面では判定なしで進めてよい。失敗しても物語が完全に止まらないよう、別の手がかりや代償付きの前進を用意する。
 
@@ -93,7 +95,17 @@ ${edition === "7" ? `幸運 ${character.luck ?? 0} / ダメージボーナス ${
 
 技能値:
 ${lines.join("、")}
-${character.memo ? `\nメモ・背景:\n${character.memo}` : ""}`;
+${formatWeapons(character, derived.damageBonus)}${character.memo ? `\nメモ・背景:\n${character.memo}` : ""}`;
+}
+
+function formatWeapons(character: Character, damageBonus: string): string {
+  const weapons = parseWeaponsJson(character.weaponsJson);
+  if (weapons.length === 0) return "";
+  const lines = weapons.map(
+    (w) =>
+      `${w.name} (技能: ${w.skillName}、ダメージ: ${resolveDamageExpression(w.damage, damageBonus)}${w.notes ? `、${w.notes}` : ""})`,
+  );
+  return `\n所持武器: ${lines.join("、")}\n`;
 }
 
 export interface PromptMember {

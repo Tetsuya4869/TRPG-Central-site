@@ -22,6 +22,9 @@ function formatToolLine(data: Record<string, unknown>): string {
     const result = data.success ? "成功" : "失敗";
     return `> 🧠 ${who}**SANチェック** — 出目 ${data.roll} / ${data.target} → ${result} (SAN ${data.san_before} → ${data.san_after}、減少 ${data.loss})`;
   }
+  if (tool === "madness_roll") {
+    return `> 🌀 ${who}**狂気表** — 出目 ${data.roll} → **${data.title}** (持続: ${data.duration})`;
+  }
   return `> 🎲 ${who}${data.reason ? `**${data.reason}** — ` : ""}${data.expression} → **${data.total}**`;
 }
 

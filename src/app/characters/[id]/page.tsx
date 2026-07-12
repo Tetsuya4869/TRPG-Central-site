@@ -13,7 +13,10 @@ import { skillsSchema, type StatBlock } from "@/lib/coc6/types";
 import { DeleteCharacterButton } from "@/components/characters/DeleteCharacterButton";
 import { DuplicateCharacterButton } from "@/components/characters/DuplicateCharacterButton";
 import { CocofoliaExportButton } from "@/components/characters/CocofoliaExportButton";
+import { WeaponsPanel } from "@/components/characters/WeaponsPanel";
+import { PlayHistory } from "@/components/characters/PlayHistory";
 import { buildCocofoliaCharacter } from "@/lib/cocofolia";
+import { parseWeaponsJson } from "@/lib/weapons";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +58,7 @@ export default async function CharacterDetailPage({
   // 表示: 定義済み技能(初期値から変更されたものを強調) + カスタム技能
   const defNames = new Set(skillDefs.map((d) => d.name));
   const customSkills = Object.entries(skills).filter(([n]) => !defNames.has(n));
+  const weapons = parseWeaponsJson(character.weaponsJson);
 
   return (
     <div className="space-y-6">
@@ -171,6 +175,13 @@ export default async function CharacterDetailPage({
         </div>
       </section>
 
+      {/* 武器 */}
+      <WeaponsPanel
+        characterId={character.id}
+        weapons={weapons}
+        damageBonus={derived.damageBonus}
+      />
+
       {/* 技能 */}
       <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5 space-y-4">
         <h2 className="font-semibold text-zinc-300">
@@ -234,6 +245,9 @@ export default async function CharacterDetailPage({
           </p>
         </section>
       )}
+
+      {/* プレイ記録 */}
+      <PlayHistory characterId={character.id} />
     </div>
   );
 }

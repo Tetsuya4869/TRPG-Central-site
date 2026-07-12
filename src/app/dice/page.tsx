@@ -48,6 +48,13 @@ export default function DicePage() {
   const [selectedCharacterId, setSelectedCharacterId] = useState("");
   const [checkEdition, setCheckEdition] = useState<Edition>("6");
   const [bonusDice, setBonusDice] = useState(0); // 7版: 正=ボーナス、負=ペナルティ
+  const [madnessEdition, setMadnessEdition] = useState<Edition>("6");
+  const [madness, setMadness] = useState<{
+    roll: number;
+    title: string;
+    description: string;
+    duration: string;
+  } | null>(null);
 
   const fetchHistory = useCallback(async () => {
     const res = await fetch("/api/dice");
@@ -136,6 +143,29 @@ export default function DicePage() {
   function rollExpression(expr: string) {
     setExpression(expr);
     roll({ expression: expr });
+  }
+
+  async function rollMadnessTable() {
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/madness", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ edition: madnessEdition }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "狂気表のロールに失敗しました");
+        return;
+      }
+      setMadness(data);
+      await fetchHistory();
+    } catch {
+      setError("通信エラーが発生しました");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function rollSkillCheck() {
@@ -330,6 +360,54 @@ export default function DicePage() {
               {error}
             </p>
           )}
+
+          {/* 狂気表 */}
+          <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-semibold text-zinc-300">
+                🌀 狂気表
+                <span className="ml-2 text-xs font-normal text-zinc-500">
+                  SANを一度に5以上失ったら
+                </span>
+              </h2>
+              <div className="flex items-center gap-2">
+                <div className="flex rounded border border-zinc-700 overflow-hidden text-xs">
+                  {(["6", "7"] as const).map((ed) => (
+                    <button
+                      key={ed}
+                      onClick={() => setMadnessEdition(ed)}
+                      className={`px-2.5 py-1 ${
+                        madnessEdition === ed
+                          ? "bg-fuchsia-900/60 text-fuchsia-200"
+                          : "text-zinc-500 hover:text-zinc-300"
+                      }`}
+                    >
+                      {ed}版
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={rollMadnessTable}
+                  disabled={busy}
+                  className="rounded bg-fuchsia-800/80 px-3 py-1.5 text-sm font-semibold text-fuchsia-100 hover:bg-fuchsia-700/80 disabled:opacity-50"
+                >
+                  1d10 ロール
+                </button>
+              </div>
+            </div>
+            {madness && (
+              <div className="rounded border border-fuchsia-800/60 bg-fuchsia-950/30 px-4 py-3 space-y-1">
+                <p className="text-sm">
+                  <span className="font-mono font-bold text-fuchsia-300 mr-2">
+                    {madness.roll}
+                  </span>
+                  <span className="font-bold text-fuchsia-200">{madness.title}</span>
+                </p>
+                <p className="text-xs text-zinc-400">{madness.description}</p>
+                <p className="text-xs text-zinc-500">持続: {madness.duration}</p>
+              </div>
+            )}
+          </section>
 
           {/* 最新結果 */}
           {latest && (

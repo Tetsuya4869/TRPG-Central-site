@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { weaponsSchema } from "@/lib/weapons";
 
 // 技能名 → 現在値 のマップ (Character.skillsJson の中身)
 export const skillsSchema = z.record(z.string(), z.number().int().min(0).max(100));
@@ -63,6 +64,7 @@ export const characterInputSchema = statBlockSchema.extend({
     .optional()
     .nullable(),
   skills: skillsSchema.default({}),
+  weapons: weaponsSchema.default([]),
   memo: z.string().max(10000).optional().nullable(),
   // 省略時は派生値の上限で初期化する
   currentHp: z.number().int().min(0).optional(),

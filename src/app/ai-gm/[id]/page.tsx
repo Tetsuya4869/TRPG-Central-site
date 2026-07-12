@@ -80,6 +80,23 @@ function ToolCard({ data }: { data: Record<string, unknown> }) {
       </div>
     );
   }
+  if (tool === "madness_roll") {
+    return (
+      <div className="mx-auto max-w-lg rounded-lg border border-fuchsia-800/60 bg-fuchsia-950/30 px-4 py-3 text-sm space-y-1">
+        <div className="flex items-center gap-3">
+          <span>🌀</span>
+          {who}
+          <span className="text-zinc-300">狂気表</span>
+          <span className="font-mono text-lg font-bold text-fuchsia-300">
+            {String(data.roll)}
+          </span>
+          <span className="font-bold text-fuchsia-200">{String(data.title)}</span>
+        </div>
+        <p className="text-xs text-zinc-400">{String(data.description)}</p>
+        <p className="text-xs text-zinc-500">持続: {String(data.duration)}</p>
+      </div>
+    );
+  }
   return (
     <div className="mx-auto flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-900/60 px-4 py-2 text-sm">
       <span>🎲</span>
@@ -141,7 +158,32 @@ export default function AiGmPlayPage({
   const [loading, setLoading] = useState(true);
   const [showGrowthModal, setShowGrowthModal] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [ttsEnabled, setTtsEnabled] = useState(false);
+  // 送信ループのクロージャ内から最新のトグル状態を読むためのref
+  const ttsRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const ttsSupported =
+    typeof window !== "undefined" && "speechSynthesis" in window;
+
+  function toggleTts() {
+    const next = !ttsEnabled;
+    setTtsEnabled(next);
+    ttsRef.current = next;
+    if (!next && ttsSupported) window.speechSynthesis.cancel();
+  }
+
+  // キーパーの語りを読み上げる (対応ブラウザのみ)
+  function speak(text: string) {
+    if (!ttsRef.current || !ttsSupported) return;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "ja-JP";
+    const jaVoice = window.speechSynthesis
+      .getVoices()
+      .find((v) => v.lang.startsWith("ja"));
+    if (jaVoice) utterance.voice = jaVoice;
+    window.speechSynthesis.speak(utterance);
+  }
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/ai-gm/sessions/${id}`);
@@ -197,6 +239,7 @@ export default function AiGmPlayPage({
         if (currentText) {
           const finished = currentText;
           setMessages((prev) => [...prev, { kind: "assistant", text: finished }]);
+          speak(finished);
           currentText = "";
           setStreamingText("");
         }
@@ -300,6 +343,19 @@ export default function AiGmPlayPage({
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {ttsSupported && (
+              <button
+                onClick={toggleTts}
+                title="キーパーの語りをブラウザ音声で読み上げます"
+                className={`rounded border px-3 py-1.5 text-xs ${
+                  ttsEnabled
+                    ? "border-emerald-500 text-emerald-300"
+                    : "border-zinc-700 text-zinc-400 hover:border-emerald-500 hover:text-emerald-300"
+                }`}
+              >
+                {ttsEnabled ? "🔊 読み上げ中" : "🔇 読み上げ"}
+              </button>
+            )}
             {messages.length > 0 && (
               <>
                 <button

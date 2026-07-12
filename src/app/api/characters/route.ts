@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
       currentSan: d.currentSan ?? derived.san, // 7版は初期SAN=POW
 
       skillsJson: JSON.stringify(d.skills),
+      weaponsJson: JSON.stringify(d.weapons),
       memo: d.memo ?? null,
     },
   });

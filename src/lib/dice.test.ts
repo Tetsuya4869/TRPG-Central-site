@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseDice, rollDice } from "./dice";
+import { parseDice, parseExpression, rollDice } from "./dice";
 
 // 常に最小値/最大値を出す決定的RNG
 const minRng = () => 0;
@@ -58,5 +58,60 @@ describe("rollDice", () => {
       expect(r.total).toBeGreaterThanOrEqual(1);
       expect(r.total).toBeLessThanOrEqual(100);
     }
+  });
+});
+
+describe("parseExpression (複合式)", () => {
+  it("1d6+1d4+2 をパースできる", () => {
+    expect(parseExpression("1d6+1d4+2")).toEqual({
+      terms: [
+        { count: 1, sides: 6, sign: 1 },
+        { count: 1, sides: 4, sign: 1 },
+      ],
+      modifier: 2,
+    });
+  });
+  it("マイナスのダイス項: 1d6-1d4", () => {
+    expect(parseExpression("1d6-1d4")).toEqual({
+      terms: [
+        { count: 1, sides: 6, sign: 1 },
+        { count: 1, sides: 4, sign: -1 },
+      ],
+      modifier: 0,
+    });
+  });
+  it("定数は合算される: 1d6+3-1", () => {
+    expect(parseExpression("1d6+3-1").modifier).toBe(2);
+  });
+  it("空白を無視する: ' 1d6 + 1d4 '", () => {
+    expect(parseExpression(" 1d6 + 1d4 ").terms).toHaveLength(2);
+  });
+  it("ダイス項なし・不正な式は拒否する", () => {
+    expect(() => parseExpression("5")).toThrow();
+    expect(() => parseExpression("abc")).toThrow();
+    expect(() => parseExpression("1d6 1d4")).toThrow(); // 符号なし連結
+    expect(() => parseExpression("1d6+")).toThrow();
+    expect(() => parseExpression("")).toThrow();
+  });
+  it("合計個数・項数の上限を守る", () => {
+    expect(() => parseExpression("60d6+60d6")).toThrow(); // 計120個
+    expect(() =>
+      parseExpression("1d6+1d6+1d6+1d6+1d6+1d6+1d6+1d6+1d6+1d6+1d6"),
+    ).toThrow(); // 11項
+  });
+});
+
+describe("rollDice (複合式)", () => {
+  it("1d6+1d4+2: 最小値4 / 最大値12", () => {
+    expect(rollDice("1d6+1d4+2", minRng).total).toBe(4);
+    expect(rollDice("1d6+1d4+2", maxRng).total).toBe(12);
+  });
+  it("マイナス項は負数で記録され合計から引かれる", () => {
+    const r = rollDice("1d6-1d4", maxRng);
+    expect(r.rolls).toEqual([6, -4]);
+    expect(r.total).toBe(2);
+  });
+  it("複合式が正規化される", () => {
+    expect(rollDice("1D6 + 1d4+2", minRng).expression).toBe("1d6+1d4+2");
   });
 });

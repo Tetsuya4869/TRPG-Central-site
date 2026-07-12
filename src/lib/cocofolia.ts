@@ -11,6 +11,7 @@ import {
   type Edition,
 } from "@/lib/coc";
 import { skillsSchema, type StatBlock } from "@/lib/coc6/types";
+import { parseWeaponsJson, resolveDamageExpression } from "@/lib/weapons";
 
 interface CocofoliaStatus {
   label: string;
@@ -81,11 +82,26 @@ export function buildCocofoliaCharacter(character: Character): CocofoliaCharacte
     }
   }
 
-  // ダメージボーナス付きダメージロールの例
-  if (derived.damageBonus !== "±0") {
-    commands.push(`1d3${derived.damageBonus} 【こぶしダメージ(DB込)】`);
-  } else {
-    commands.push(`1d3 【こぶしダメージ】`);
+  // 登録武器: 命中判定+ダメージ(DB解決済み)をセットで出す
+  const weapons = parseWeaponsJson(character.weaponsJson);
+  for (const w of weapons) {
+    const skillValue =
+      effective.find((s) => s.name === w.skillName)?.value ??
+      skillBaseFor(edition, w.skillName, stats) ??
+      0;
+    commands.push(check(skillValue, `${w.name}攻撃`));
+    commands.push(
+      `${resolveDamageExpression(w.damage, derived.damageBonus)} 【${w.name}ダメージ】`,
+    );
+  }
+
+  // ダメージボーナス付きダメージロールの例 (武器未登録時の素手)
+  if (weapons.length === 0) {
+    if (derived.damageBonus !== "±0") {
+      commands.push(`1d3${derived.damageBonus} 【こぶしダメージ(DB込)】`);
+    } else {
+      commands.push(`1d3 【こぶしダメージ】`);
+    }
   }
 
   const memoParts = [

@@ -15,6 +15,21 @@ import {
   type Edition,
 } from "@/lib/coc";
 import type { StatBlock, Skills } from "@/lib/coc6/types";
+import type { Weapon } from "@/lib/weapons";
+
+// 版ごとのよく使う武器プリセット
+const WEAPON_PRESETS: Record<Edition, Weapon[]> = {
+  "6": [
+    { name: "こぶし", skillName: "こぶし(パンチ)", damage: "1d3+DB" },
+    { name: "ナイフ", skillName: "ナイフ", damage: "1d4+DB" },
+    { name: "拳銃 (.38)", skillName: "拳銃", damage: "1d10" },
+  ],
+  "7": [
+    { name: "素手", skillName: "近接戦闘(格闘)", damage: "1d3+DB" },
+    { name: "ナイフ", skillName: "近接戦闘(刀剣)", damage: "1d4+DB" },
+    { name: "拳銃 (.38)", skillName: "射撃(拳銃)", damage: "1d10" },
+  ],
+};
 
 const STAT_LABELS: Record<keyof StatBlock, string> = {
   str: "STR",
@@ -40,6 +55,7 @@ export interface CharacterFormValues {
   imageUrl: string;
   stats: StatBlock;
   skills: Skills;
+  weapons: Weapon[];
   memo: string;
 }
 
@@ -84,6 +100,7 @@ export function CharacterForm({
   const [uploading, setUploading] = useState(false);
   const [stats, setStats] = useState<StatBlock>(initial?.stats ?? defaultStats6);
   const [skills, setSkills] = useState<Skills>(initial?.skills ?? {});
+  const [weapons, setWeapons] = useState<Weapon[]>(initial?.weapons ?? []);
   const [memo, setMemo] = useState(initial?.memo ?? "");
   const [customSkill, setCustomSkill] = useState("");
   const [error, setError] = useState("");
@@ -186,6 +203,7 @@ export function CharacterForm({
       imageUrl: imageUrl || null,
       ...stats,
       skills,
+      weapons: weapons.filter((w) => w.name.trim() && w.skillName.trim() && w.damage.trim()),
       memo: memo.trim() || null,
     };
     try {
@@ -521,6 +539,121 @@ export function CharacterForm({
             </button>
           </div>
         </div>
+      </section>
+
+      {/* 武器 */}
+      <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold text-zinc-300">武器</h2>
+          <div className="flex flex-wrap gap-1.5">
+            {WEAPON_PRESETS[edition].map((preset) => (
+              <button
+                key={preset.name}
+                onClick={() =>
+                  weapons.length < 20 && setWeapons((prev) => [...prev, { ...preset }])
+                }
+                className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:border-emerald-500 hover:text-emerald-300"
+              >
+                + {preset.name}
+              </button>
+            ))}
+            <button
+              onClick={() =>
+                weapons.length < 20 &&
+                setWeapons((prev) => [...prev, { name: "", skillName: "", damage: "" }])
+              }
+              className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:border-emerald-500 hover:text-emerald-300"
+            >
+              + 空欄で追加
+            </button>
+          </div>
+        </div>
+        {weapons.length === 0 ? (
+          <p className="text-xs text-zinc-600">
+            武器を登録すると、詳細画面から命中判定+ダメージロールをワンタップで行えます。ダメージ式の
+            <code className="mx-1 rounded bg-zinc-950 px-1">DB</code>
+            はダメージボーナス ({derived.damageBonus}) に自動で置き換わります。
+          </p>
+        ) : (
+          <div className="space-y-1.5">
+            <div className="hidden sm:grid grid-cols-[1fr_1fr_120px_1fr_28px] gap-1.5 text-xs text-zinc-600 px-1">
+              <span>武器名</span>
+              <span>技能</span>
+              <span>ダメージ</span>
+              <span>メモ</span>
+              <span />
+            </div>
+            {weapons.map((w, i) => (
+              <div
+                key={i}
+                className="grid grid-cols-2 sm:grid-cols-[1fr_1fr_120px_1fr_28px] gap-1.5"
+              >
+                <input
+                  value={w.name}
+                  onChange={(e) =>
+                    setWeapons((prev) =>
+                      prev.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)),
+                    )
+                  }
+                  placeholder="武器名"
+                  className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm focus:border-emerald-500 focus:outline-none"
+                />
+                <input
+                  value={w.skillName}
+                  onChange={(e) =>
+                    setWeapons((prev) =>
+                      prev.map((x, j) =>
+                        j === i ? { ...x, skillName: e.target.value } : x,
+                      ),
+                    )
+                  }
+                  placeholder="技能 (例: 拳銃)"
+                  list="weapon-skill-options"
+                  className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm focus:border-emerald-500 focus:outline-none"
+                />
+                <input
+                  value={w.damage}
+                  onChange={(e) =>
+                    setWeapons((prev) =>
+                      prev.map((x, j) => (j === i ? { ...x, damage: e.target.value } : x)),
+                    )
+                  }
+                  placeholder="1d6+DB"
+                  className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm font-mono focus:border-emerald-500 focus:outline-none"
+                />
+                <input
+                  value={w.notes ?? ""}
+                  onChange={(e) =>
+                    setWeapons((prev) =>
+                      prev.map((x, j) =>
+                        j === i ? { ...x, notes: e.target.value || null } : x,
+                      ),
+                    )
+                  }
+                  placeholder="装弾数など"
+                  className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm focus:border-emerald-500 focus:outline-none"
+                />
+                <button
+                  onClick={() => setWeapons((prev) => prev.filter((_, j) => j !== i))}
+                  className="text-zinc-600 hover:text-red-400"
+                  title="削除"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <datalist id="weapon-skill-options">
+              {skillDefs
+                .filter((d) => d.category === "戦闘")
+                .map((d) => (
+                  <option key={d.name} value={d.name} />
+                ))}
+              {customSkills.map((n) => (
+                <option key={n} value={n} />
+              ))}
+            </datalist>
+          </div>
+        )}
       </section>
 
       {/* メモ */}

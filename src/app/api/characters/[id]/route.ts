@@ -53,6 +53,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         ...(d.currentMp !== undefined && { currentMp: d.currentMp }),
         ...(d.currentSan !== undefined && { currentSan: d.currentSan }),
         skillsJson: JSON.stringify(d.skills),
+        weaponsJson: JSON.stringify(d.weapons),
         memo: d.memo ?? null,
       },
     });

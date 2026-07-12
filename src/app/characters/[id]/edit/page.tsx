@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { skillsSchema } from "@/lib/coc6/types";
+import { parseWeaponsJson } from "@/lib/weapons";
 import {
   CharacterForm,
   type CharacterFormValues,
@@ -37,6 +38,7 @@ export default async function EditCharacterPage({
       edu: character.edu,
     },
     skills: skillsSchema.catch({}).parse(JSON.parse(character.skillsJson)),
+    weapons: parseWeaponsJson(character.weaponsJson),
     memo: character.memo ?? "",
   };
 

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { rollDice } from "@/lib/dice";
 import { skillCheck, sanCheck } from "@/lib/coc6/check";
 import { skillCheck7 } from "@/lib/coc7/check";
+import { rollMadness } from "@/lib/coc/madness";
 import type { AiGmState } from "@/lib/coc6/types";
 import type { Edition } from "@/lib/coc";
 
@@ -120,6 +121,28 @@ function buildBaseTools(edition: Edition): Anthropic.Tool[] {
         },
       },
       required: ["character_name", "loss_on_success", "loss_on_failure", "reason"],
+    },
+  },
+  {
+    name: "madness_roll",
+    description:
+      isV7
+        ? "狂気表(狂気の発作・リアルタイム)をロールする。探索者がSANチェックで一度に5以上のSANを失ったときに使う。結果の症状と持続時間に沿って発作を演出すること。"
+        : "狂気表(一時的狂気)をロールする。探索者がSANチェックで一度に5以上のSANを失ったとき(アイデアロール成功で発狂に気づいた場面など)に使う。結果の症状と持続時間に沿って発狂を演出すること。",
+    input_schema: {
+      type: "object",
+      properties: {
+        character_name: {
+          type: "string",
+          description:
+            "発狂する探索者の名前。シート記載の名前を一字一句正確に指定する",
+        },
+        reason: {
+          type: "string",
+          description: "発狂の原因 (例: グールを目撃してSANを7失った)",
+        },
+      },
+      required: ["character_name", "reason"],
     },
   },
   ];
@@ -284,6 +307,35 @@ export async function executeGmTool(
         display: payload,
         newMemberState: { memberId: member.memberId, state: newState },
       };
+    }
+
+    case "madness_roll": {
+      const member = resolveMember(ctx.members, input.character_name);
+      if (!member) return unknownMemberResult(ctx.members, input.character_name);
+      const reason = String(input.reason ?? "");
+      const result = rollMadness(ctx.edition);
+      await prisma.diceRoll.create({
+        data: {
+          expression: "1d10",
+          rolls: JSON.stringify([result.roll]),
+          total: result.roll,
+          context: `狂気表: ${result.entry.title} (${reason})`,
+          characterId: member.characterId,
+          characterName: member.name,
+          source: "AI_GM",
+          aiGmSessionId: ctx.aiGmSessionId,
+        },
+      });
+      const payload = {
+        tool: "madness_roll",
+        character_name: member.name,
+        roll: result.roll,
+        title: result.entry.title,
+        description: result.entry.description,
+        duration: result.durationText,
+        reason,
+      };
+      return { resultForModel: JSON.stringify(payload), display: payload };
     }
 
     default:
