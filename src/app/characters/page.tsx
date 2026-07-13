@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { deriveStats } from "@/lib/coc6/stats";
+import { CharacterImportButton } from "@/components/characters/CharacterImportButton";
 
 export const dynamic = "force-dynamic";
 
@@ -13,12 +14,15 @@ export default async function CharactersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">📜 探索者一覧</h1>
-        <Link
-          href="/characters/new"
-          className="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold hover:bg-emerald-500"
-        >
-          + 新規作成
-        </Link>
+        <div className="flex gap-2">
+          <CharacterImportButton />
+          <Link
+            href="/characters/new"
+            className="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold hover:bg-emerald-500"
+          >
+            + 新規作成
+          </Link>
+        </div>
       </div>
 
       {characters.length === 0 ? (
