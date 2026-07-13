@@ -1,10 +1,22 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import "./globals.css";
+import { PwaRegister } from "@/components/PwaRegister";
 
 export const metadata: Metadata = {
   title: "TRPG Central",
   description: "クトゥルフ神話TRPGをはじめとするTRPGの管理サイト",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "TRPG Central" },
+  icons: {
+    icon: "/icon-192.png",
+    apple: "/apple-touch-icon.png",
+  },
+};
+
+// Next 16 は themeColor を viewport に置く
+export const viewport: Viewport = {
+  themeColor: "#059669",
 };
 
 const navItems = [
@@ -24,6 +36,7 @@ export default function RootLayout({
   return (
     <html lang="ja" className="h-full antialiased">
       <body className="min-h-full flex flex-col bg-zinc-950 text-zinc-100">
+        <PwaRegister />
         <header className="border-b border-zinc-800 bg-zinc-900/80 backdrop-blur sticky top-0 z-10">
           <div className="mx-auto max-w-5xl px-4 min-h-14 py-2 flex flex-wrap items-center gap-x-5 gap-y-1">
             <Link
@@ -49,7 +62,7 @@ export default function RootLayout({
           {children}
         </main>
         <footer className="border-t border-zinc-800 py-4 text-center text-xs text-zinc-500">
-          TRPG Central — クトゥルフ神話TRPG(6版)対応 管理サイト
+          TRPG Central — クトゥルフ神話TRPG(6版/7版)対応 管理サイト
         </footer>
       </body>
     </html>
