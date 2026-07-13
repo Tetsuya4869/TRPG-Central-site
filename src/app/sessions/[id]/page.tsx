@@ -7,6 +7,7 @@ import { StatusBadge, STATUS_LABELS } from "@/components/sessions/StatusBadge";
 import { ScenarioAssetsPanel } from "@/components/scenarios/ScenarioAssetsPanel";
 import { KpAssistantPanel } from "@/components/sessions/KpAssistantPanel";
 import { CombatTracker, type CombatPc } from "@/components/sessions/CombatTracker";
+import { SessionLogPanel } from "@/components/sessions/SessionLogPanel";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 interface CharacterSummary {
@@ -23,6 +24,8 @@ interface CharacterSummary {
   siz: number;
   int_: number;
   edu: number;
+  skillsJson: string; // 戦闘トラッカーの武器命中判定に使う技能値
+  weaponsJson: string; // 戦闘トラッカーの武器連携に使う
 }
 
 interface SessionDetail {
@@ -369,8 +372,13 @@ export default function SessionDetailPage({
             int_: sc.character.int_,
             edu: sc.character.edu,
           },
+          skillsJson: sc.character.skillsJson,
+          weaponsJson: sc.character.weaponsJson,
         }))}
       />
+
+      {/* 卓ログ (ダイス履歴 + 出来事メモの時系列) */}
+      <SessionLogPanel sessionId={session.id} />
 
       {/* 紐付きシナリオのNPC・ハンドアウト (読み取り専用) */}
       {session.scenario && (

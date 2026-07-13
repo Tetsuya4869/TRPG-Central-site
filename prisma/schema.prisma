@@ -58,6 +58,18 @@ model GameSession {
 
   characters SessionCharacter[]
   kpMessages SessionChatMessage[]
+  logs       SessionLog[]
+}
+
+// 人間卓の出来事ログ(GMの自由記述メモ)。kind: "EVENT" | "NOTE" 等の分類 (String+zod検証)。
+// ダイス履歴は DiceRoll.gameSessionId 側で紐付け、表示時にこれとマージする。
+model SessionLog {
+  id            String      @id @default(cuid())
+  gameSessionId String
+  gameSession   GameSession @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
+  kind          String      @default("EVENT")
+  body          String
+  createdAt     DateTime    @default(now())
 }
 
 // 人間卓のAI KP補佐チャット。ChatMessage(AI GM専用)とは分離する
@@ -129,6 +141,7 @@ model DiceRoll {
   characterName String? // 表示・統計用スナップショット (キャラ改名/削除に耐える)
   sanAfter      Int? // san_check時のみ。統計のSAN推移用
   source        String       @default("MANUAL")
+  gameSessionId String? // 人間卓に紐付くロール (FKは張らない: characterIdと同方針。卓ログ表示用)
   aiGmSessionId String?
   aiGmSession   AiGmSession? @relation(fields: [aiGmSessionId], references: [id], onDelete: Cascade)
   createdAt     DateTime     @default(now())

@@ -4,6 +4,7 @@ import {
   sortByDex,
   nextTurn,
   prevTurn,
+  resolveAttack,
   type CombatState,
   type Combatant,
 } from "./combat";
@@ -66,5 +67,57 @@ describe("combatStateSchema round-trip", () => {
   });
   it("不正データは拒否", () => {
     expect(combatStateSchema.safeParse({ round: 0, turnIndex: 0, combatants: [] }).success).toBe(false);
+  });
+  it("武器付き戦闘員をround-tripできる", () => {
+    const state: CombatState = {
+      round: 1,
+      turnIndex: 0,
+      combatants: [
+        {
+          ...c("食屍鬼", 13),
+          edition: "6",
+          damageBonus: "±0",
+          weapons: [{ name: "爪", skillName: "爪", damage: "1d6", skillValue: 30 }],
+        },
+      ],
+    };
+    const parsed = combatStateSchema.parse(JSON.parse(JSON.stringify(state)));
+    expect(parsed).toEqual(state);
+  });
+});
+
+describe("resolveAttack", () => {
+  // rollDie(100)は floor(rng*100)+1。命中判定→ダメージの順にrngを消費する
+  const seqRng = (...values: number[]) => {
+    let i = 0;
+    return () => values[i++ % values.length];
+  };
+
+  it("命中(出目≦技能値)ならダメージを算出、DBを解決する", () => {
+    // 命中1d100: 0.1→11 ≦60 SUCCESS、ダメージ1d6:0.5→4、+1d4(DB):0.5→3 = 7
+    const r = resolveAttack("6", 60, "1d6+DB", "+1d4", seqRng(0.1, 0.5, 0.5));
+    expect(r.hit).toBe(true);
+    expect(r.outcome).toBe("SUCCESS");
+    expect(r.damageExpression).toBe("1d6+1d4");
+    expect(r.damage?.total).toBe(7);
+  });
+
+  it("失敗(出目>技能値)ならダメージなし", () => {
+    // 1d100: 0.9→91 >60 FAILURE
+    const r = resolveAttack("6", 60, "1d6", "±0", seqRng(0.9));
+    expect(r.hit).toBe(false);
+    expect(r.damage).toBeNull();
+  });
+
+  it("6版ファンブル(96-00)は高技能でも命中しない", () => {
+    // 1d100: 0.96→97 → FUMBLE
+    const r = resolveAttack("6", 90, "1d6", "±0", seqRng(0.96));
+    expect(r.outcome).toBe("FUMBLE");
+    expect(r.hit).toBe(false);
+  });
+
+  it("DB±0はダメージ式に足されない", () => {
+    const r = resolveAttack("6", 80, "1d6+DB", "±0", seqRng(0.1, 0.5));
+    expect(r.damageExpression).toBe("1d6");
   });
 });

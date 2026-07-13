@@ -8,11 +8,14 @@ import {
   nextTurn,
   prevTurn,
   emptyCombat,
+  resolveAttack,
   type CombatState,
   type Combatant,
+  type CombatantWeapon,
 } from "@/lib/combat";
-import { deriveStatsFor, type Edition } from "@/lib/coc";
+import { deriveStatsFor, effectiveSkillsFor, type Edition } from "@/lib/coc";
 import type { StatBlock } from "@/lib/coc6/types";
+import { parseWeaponsJson } from "@/lib/weapons";
 
 export interface CombatPc {
   characterId: string;
@@ -20,6 +23,24 @@ export interface CombatPc {
   edition: string;
   currentHp: number;
   stats: StatBlock;
+  skillsJson: string;
+  weaponsJson: string;
+}
+
+// PCの登録武器を、技能値スナップショット付きの戦闘用武器に変換する
+function pcCombatWeapons(pc: CombatPc, edition: Edition): CombatantWeapon[] {
+  let assigned: Record<string, number> = {};
+  try {
+    assigned = JSON.parse(pc.skillsJson);
+  } catch {
+    // 壊れたJSONは未割り振り扱い
+  }
+  const effective = effectiveSkillsFor(edition, assigned, pc.stats);
+  return parseWeaponsJson(pc.weaponsJson).map((w) => ({
+    ...w,
+    skillValue:
+      effective.find((s) => s.name === w.skillName)?.value ?? 0,
+  }));
 }
 
 function parseCombat(json: string | null): CombatState | null {
@@ -50,6 +71,26 @@ export function CombatTracker({
   const [saveError, setSaveError] = useState("");
   const [savedFlash, setSavedFlash] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+
+  // 攻撃フロー: どの戦闘員の攻撃パネルを開いているか / 選択中の武器 / 実行中 / 結果
+  const [attackFor, setAttackFor] = useState<string | null>(null);
+  const [pickWeapon, setPickWeapon] = useState<number | null>(null);
+  const [attackBusy, setAttackBusy] = useState(false);
+  const [attackError, setAttackError] = useState("");
+  const [attackResult, setAttackResult] = useState<{
+    attacker: string;
+    target: string;
+    weapon: string;
+    roll: number;
+    outcome: string;
+    hit: boolean;
+    damage: number | null;
+    damageExpr: string;
+  } | null>(null);
+  // NPC武器追加フォーム
+  const [nwName, setNwName] = useState("");
+  const [nwSkill, setNwSkill] = useState("");
+  const [nwDamage, setNwDamage] = useState("");
 
   // 最新のcombatを参照するためのref (debounce保存が古いstateを送らないように)
   const combatRef = useRef<CombatState | null>(combat);
@@ -141,6 +182,9 @@ export function CombatTracker({
       hp: pc.currentHp,
       maxHp: derived.hp,
       memo: "",
+      edition,
+      damageBonus: derived.damageBonus,
+      weapons: pcCombatWeapons(pc, edition),
     };
     persist({ ...combat, combatants: [...combat.combatants, combatant] });
   }
@@ -161,11 +205,94 @@ export function CombatTracker({
       hp,
       maxHp: hp,
       memo: "",
+      edition: "6",
+      damageBonus: "±0",
+      weapons: [],
     };
     setNpcName("");
     setNpcDex("");
     setNpcHp("");
     persist({ ...combat, combatants: [...combat.combatants, combatant] });
+  }
+
+  // NPCに武器を1件追加する
+  function addNpcWeapon(combatantId: string, weapon: CombatantWeapon) {
+    if (!combat) return;
+    persist({
+      ...combat,
+      combatants: combat.combatants.map((c) =>
+        c.id === combatantId
+          ? { ...c, weapons: [...(c.weapons ?? []), weapon] }
+          : c,
+      ),
+    });
+  }
+
+  // 攻撃実行: PC/NPCとも戦闘員に保存した武器スナップショット(技能値・ダメージ式)で
+  // resolveAttack を回す。命中判定は judgeOutcomeFor、ダメージは resolveDamageExpression と
+  // 共通ロジックを再利用。ヒット時は対象のHPを減らし、判定/ダメージを /api/dice で履歴化する。
+  async function executeAttack(
+    attacker: Combatant,
+    weaponIdx: number,
+    targetId: string,
+  ) {
+    const weapon = attacker.weapons?.[weaponIdx];
+    const target = combat?.combatants.find((c) => c.id === targetId);
+    if (!weapon || !target || attackBusy) return;
+    setAttackBusy(true);
+    setAttackError("");
+    try {
+      const edition: Edition = attacker.edition === "7" ? "7" : "6";
+      const r = resolveAttack(
+        edition,
+        weapon.skillValue,
+        weapon.damage,
+        attacker.damageBonus ?? "±0",
+      );
+      const dmgTotal = r.damage?.total ?? 0;
+
+      // 履歴化 (卓ログに紐付け)。命中判定は失敗も記録、ダメージは命中時のみ。
+      const record = (payload: Record<string, unknown>) =>
+        fetch("/api/dice", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            gameSessionId: sessionId,
+            characterId: attacker.characterId ?? undefined,
+            characterName: attacker.name,
+            ...payload,
+          }),
+        }).catch(() => {});
+      await record({
+        target: weapon.skillValue,
+        edition,
+        context: `${weapon.name}攻撃 → ${target.name}`,
+      });
+      if (r.hit && dmgTotal > 0) {
+        await record({
+          expression: r.damageExpression,
+          context: `${weapon.name}ダメージ → ${target.name}`,
+        });
+        changeHp(targetId, -dmgTotal);
+      }
+
+      setAttackResult({
+        attacker: attacker.name,
+        target: target.name,
+        weapon: weapon.name,
+        roll: r.roll,
+        outcome: r.outcome,
+        hit: r.hit,
+        damage: r.hit ? dmgTotal : null,
+        damageExpr: r.damageExpression,
+      });
+      setAttackFor(null);
+      setPickWeapon(null);
+    } catch {
+      setAttackError("通信エラーが発生しました");
+    } finally {
+      setAttackBusy(false);
+    }
   }
 
   function removeCombatant(id: string) {
@@ -256,6 +383,30 @@ export function CombatTracker({
         onCancel={() => setConfirmReset(false)}
       />
 
+      {/* 直近の攻撃結果 */}
+      {attackResult && (
+        <div className="flex items-center gap-2 rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm">
+          <span className="text-zinc-400">
+            {attackResult.attacker} → {attackResult.target} ({attackResult.weapon})
+          </span>
+          <span className="font-mono text-zinc-500">出目{attackResult.roll}</span>
+          {attackResult.hit ? (
+            <span className="text-red-300 font-bold">
+              命中! {attackResult.damageExpr} → {attackResult.damage} ダメージ
+            </span>
+          ) : (
+            <span className="text-zinc-500">外れ</span>
+          )}
+          <button
+            onClick={() => setAttackResult(null)}
+            aria-label="閉じる"
+            className="ml-auto text-zinc-600 hover:text-zinc-300"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* イニシアチブ順リスト */}
       {sorted.length === 0 ? (
         <p className="text-sm text-zinc-500">下から参加者を追加してください</p>
@@ -266,62 +417,168 @@ export function CombatTracker({
             return (
               <li
                 key={combatant.id}
-                className={`flex flex-wrap items-center gap-2 rounded border px-3 py-2 text-sm ${
+                className={`rounded border ${
                   active
                     ? "border-red-500 bg-red-950/40"
                     : "border-zinc-800 bg-zinc-950/50"
                 }`}
               >
-                {active && <span className="text-red-300">▶</span>}
-                <span className="font-mono text-xs text-zinc-500 w-12">
-                  DEX{combatant.dex}
-                </span>
-                <span
-                  className={`font-semibold ${combatant.kind === "PC" ? "text-emerald-300" : "text-zinc-300"} ${combatant.hp <= 0 ? "line-through opacity-50" : ""}`}
-                >
-                  {combatant.name}
-                </span>
-                <span className="flex items-center gap-1 ml-auto">
-                  <button
-                    onClick={() => changeHp(combatant.id, -1)}
-                    aria-label="HPを1減らす"
-                    className="rounded border border-zinc-700 w-8 h-8 text-xs hover:border-red-500"
-                  >
-                    −
-                  </button>
+                <div className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
+                  {active && <span className="text-red-300">▶</span>}
+                  <span className="font-mono text-xs text-zinc-500 w-12">
+                    DEX{combatant.dex}
+                  </span>
                   <span
-                    className={`font-mono w-16 text-center ${combatant.hp <= 0 ? "text-red-400" : combatant.hp <= Math.floor(combatant.maxHp / 3) ? "text-amber-300" : ""}`}
+                    className={`font-semibold ${combatant.kind === "PC" ? "text-emerald-300" : "text-zinc-300"} ${combatant.hp <= 0 ? "line-through opacity-50" : ""}`}
                   >
-                    {combatant.hp}/{combatant.maxHp}
+                    {combatant.name}
                   </span>
                   <button
-                    onClick={() => changeHp(combatant.id, +1)}
-                    aria-label="HPを1増やす"
-                    className="rounded border border-zinc-700 w-8 h-8 text-xs hover:border-emerald-500"
+                    onClick={() => {
+                      setAttackFor(attackFor === combatant.id ? null : combatant.id);
+                      setPickWeapon(null);
+                    }}
+                    disabled={combatant.hp <= 0}
+                    aria-label={`${combatant.name}の攻撃`}
+                    className="rounded border border-red-900/60 px-2 h-8 text-xs text-red-300 hover:bg-red-950/50 disabled:opacity-30"
+                    title="攻撃"
                   >
-                    +
+                    ⚔️
                   </button>
-                </span>
-                <input
-                  value={combatant.memo}
-                  onChange={(e) => setCombat({
-                    ...combat,
-                    combatants: combat.combatants.map((c) =>
-                      c.id === combatant.id ? { ...c, memo: e.target.value } : c,
-                    ),
-                  })}
-                  onBlur={() => persist(combat)}
-                  placeholder="メモ (装甲、状態など)"
-                  className="w-32 rounded border border-zinc-800 bg-transparent px-2 py-0.5 text-xs text-zinc-400 focus:border-zinc-600 focus:outline-none"
-                />
-                <button
-                  onClick={() => removeCombatant(combatant.id)}
-                  disabled={saving}
-                  aria-label="削除"
-                  className="w-8 h-8 rounded text-xs text-zinc-600 hover:text-red-400 disabled:opacity-50"
-                >
-                  ✕
-                </button>
+                  <span className="flex items-center gap-1 ml-auto">
+                    <button
+                      onClick={() => changeHp(combatant.id, -1)}
+                      aria-label="HPを1減らす"
+                      className="rounded border border-zinc-700 w-8 h-8 text-xs hover:border-red-500"
+                    >
+                      −
+                    </button>
+                    <span
+                      className={`font-mono w-16 text-center ${combatant.hp <= 0 ? "text-red-400" : combatant.hp <= Math.floor(combatant.maxHp / 3) ? "text-amber-300" : ""}`}
+                    >
+                      {combatant.hp}/{combatant.maxHp}
+                    </span>
+                    <button
+                      onClick={() => changeHp(combatant.id, +1)}
+                      aria-label="HPを1増やす"
+                      className="rounded border border-zinc-700 w-8 h-8 text-xs hover:border-emerald-500"
+                    >
+                      +
+                    </button>
+                  </span>
+                  <input
+                    value={combatant.memo}
+                    onChange={(e) => setCombat({
+                      ...combat,
+                      combatants: combat.combatants.map((c) =>
+                        c.id === combatant.id ? { ...c, memo: e.target.value } : c,
+                      ),
+                    })}
+                    onBlur={() => persist(combat)}
+                    placeholder="メモ (装甲、状態など)"
+                    className="w-32 rounded border border-zinc-800 bg-transparent px-2 py-0.5 text-xs text-zinc-400 focus:border-zinc-600 focus:outline-none"
+                  />
+                  <button
+                    onClick={() => removeCombatant(combatant.id)}
+                    disabled={saving}
+                    aria-label="削除"
+                    className="w-8 h-8 rounded text-xs text-zinc-600 hover:text-red-400 disabled:opacity-50"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* 攻撃パネル: 武器選択 → 対象選択 */}
+                {attackFor === combatant.id && (
+                  <div className="border-t border-zinc-800 px-3 py-2 space-y-2 text-xs">
+                    {(combatant.weapons ?? []).length > 0 ? (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-zinc-500">武器:</span>
+                        {(combatant.weapons ?? []).map((w, wi) => (
+                          <button
+                            key={wi}
+                            onClick={() => setPickWeapon(wi)}
+                            className={`rounded border px-2 py-1 ${
+                              pickWeapon === wi
+                                ? "border-red-500 bg-red-950/40 text-red-200"
+                                : "border-zinc-700 text-zinc-300 hover:border-red-500"
+                            }`}
+                          >
+                            {w.name} <span className="text-zinc-500">({w.skillValue}% / {w.damage})</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-zinc-500">
+                        武器が未登録です。
+                        {combatant.kind === "PC" && "探索者シートで武器を登録してから戦闘に追加してください。"}
+                      </p>
+                    )}
+
+                    {/* NPCは武器をその場で追加できる */}
+                    {combatant.kind === "NPC" && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <input
+                          value={nwName}
+                          onChange={(e) => setNwName(e.target.value)}
+                          placeholder="武器名"
+                          className="w-24 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 focus:border-red-500 focus:outline-none"
+                        />
+                        <input
+                          value={nwSkill}
+                          onChange={(e) => setNwSkill(e.target.value)}
+                          placeholder="技能%"
+                          inputMode="numeric"
+                          className="w-16 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 focus:border-red-500 focus:outline-none"
+                        />
+                        <input
+                          value={nwDamage}
+                          onChange={(e) => setNwDamage(e.target.value)}
+                          placeholder="ダメージ (1d6)"
+                          className="w-24 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 font-mono focus:border-red-500 focus:outline-none"
+                        />
+                        <button
+                          onClick={() => {
+                            const sv = Math.max(0, Math.min(100, parseInt(nwSkill, 10) || 0));
+                            if (!nwName.trim() || !nwDamage.trim()) return;
+                            addNpcWeapon(combatant.id, {
+                              name: nwName.trim(),
+                              skillName: nwName.trim(),
+                              damage: nwDamage.trim(),
+                              skillValue: sv,
+                            });
+                            setNwName("");
+                            setNwSkill("");
+                            setNwDamage("");
+                          }}
+                          className="rounded border border-zinc-700 px-2 py-1 hover:border-red-500"
+                        >
+                          武器追加
+                        </button>
+                      </div>
+                    )}
+
+                    {/* 対象選択 (武器選択後) */}
+                    {pickWeapon !== null && (combatant.weapons ?? [])[pickWeapon] && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-zinc-500">対象:</span>
+                        {combat.combatants
+                          .filter((t) => t.id !== combatant.id)
+                          .map((t) => (
+                            <button
+                              key={t.id}
+                              onClick={() => executeAttack(combatant, pickWeapon, t.id)}
+                              disabled={attackBusy}
+                              className="rounded border border-zinc-700 px-2 py-1 text-zinc-300 hover:border-red-500 disabled:opacity-50"
+                            >
+                              → {t.name}
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                    {attackError && <p className="text-red-300">{attackError}</p>}
+                  </div>
+                )}
               </li>
             );
           })}

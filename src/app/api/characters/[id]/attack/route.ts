@@ -14,6 +14,7 @@ import type { StatBlock } from "@/lib/coc6/types";
 
 const attackSchema = z.object({
   weaponIndex: z.number().int().min(0).max(19),
+  gameSessionId: z.string().optional(), // 戦闘トラッカーから呼ぶ場合、卓ログに紐付ける
 });
 
 const HIT_OUTCOMES = new Set(["CRITICAL", "EXTREME", "HARD", "SUCCESS"]);
@@ -70,6 +71,8 @@ export async function POST(req: NextRequest, { params }: Params) {
     );
   }
 
+  const gameSessionId = parsed.data.gameSessionId ?? null;
+
   // 命中判定
   const roll = rollDie(100);
   const outcome = judgeOutcomeFor(edition, roll, skill.value);
@@ -86,6 +89,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       characterId: character.id,
       characterName: character.name,
       source: "MANUAL",
+      gameSessionId,
     },
   });
 
@@ -109,6 +113,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         characterId: character.id,
         characterName: character.name,
         source: "MANUAL",
+        gameSessionId,
       },
     });
   }

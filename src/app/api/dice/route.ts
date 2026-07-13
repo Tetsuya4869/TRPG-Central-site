@@ -6,12 +6,15 @@ import { skillCheck } from "@/lib/coc6/check";
 import { skillCheck7 } from "@/lib/coc7/check";
 
 const rollRequestSchema = z.object({
-  expression: z.string().max(20).optional(),
+  expression: z.string().max(30).optional(),
   target: z.number().int().min(1).max(100).optional(),
   context: z.string().max(200).optional(),
   edition: z.enum(["6", "7"]).default("6"),
   bonus: z.number().int().min(0).max(2).default(0), // 7版ボーナスダイス
   penalty: z.number().int().min(0).max(2).default(0), // 7版ペナルティダイス
+  gameSessionId: z.string().optional(), // 人間卓のログに紐付ける場合
+  characterId: z.string().optional(), // 誰のロールか (卓ログ表示用)
+  characterName: z.string().max(100).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -26,6 +29,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "リクエストが不正です" }, { status: 400 });
   }
   const { expression, target, context, edition, bonus, penalty } = parsed.data;
+  // 卓ログ紐付け用の共通フィールド (未指定なら従来通りグローバル履歴のみ)
+  const link = {
+    gameSessionId: parsed.data.gameSessionId ?? null,
+    characterId: parsed.data.characterId ?? null,
+    characterName: parsed.data.characterName ?? null,
+  };
 
   try {
     if (target !== undefined) {
@@ -42,6 +51,7 @@ export async function POST(req: NextRequest) {
             target,
             outcome: result.outcome,
             context: `${context ?? ""}${bpNote}`.trim() || null,
+            ...link,
           },
         });
         return NextResponse.json({
@@ -58,6 +68,7 @@ export async function POST(req: NextRequest) {
           target,
           outcome: result.outcome,
           context: context ?? null,
+          ...link,
         },
       });
       return NextResponse.json(record);
@@ -76,6 +87,7 @@ export async function POST(req: NextRequest) {
         rolls: JSON.stringify(result.rolls),
         total: result.total,
         context: context ?? null,
+        ...link,
       },
     });
     return NextResponse.json(record);
