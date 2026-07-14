@@ -1,0 +1,34 @@
+# Firebase App Hosting の設定。詳細は DEPLOY.md を参照。
+# 機密値 (DB接続文字列・APIキー・パスワード等) は Cloud Secret Manager に登録し、
+# ここでは secret 参照する (値そのものは書かない)。
+runConfig:
+  minInstances: 0
+  maxInstances: 2
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+
+env:
+  # 機密: firebase apphosting:secrets:set で登録したものを参照
+  - variable: DATABASE_URL
+    secret: DATABASE_URL
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: ANTHROPIC_API_KEY
+    secret: ANTHROPIC_API_KEY
+    availability:
+      - RUNTIME
+  - variable: APP_PASSWORD
+    secret: APP_PASSWORD
+    availability:
+      - RUNTIME
+  - variable: AUTH_SECRET
+    secret: AUTH_SECRET
+    availability:
+      - RUNTIME
+  # 非機密: バケット名はそのまま値で指定 (自分のプロジェクトのバケットに置き換える)
+  - variable: FIREBASE_STORAGE_BUCKET
+    value: your-project-id.appspot.com
+    availability:
+      - RUNTIME
