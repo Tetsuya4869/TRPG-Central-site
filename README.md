@@ -25,28 +25,35 @@
 ## 技術スタック
 
 - [Next.js](https://nextjs.org/) (App Router) + TypeScript + Tailwind CSS
-- [Prisma](https://www.prisma.io/) + SQLite (PostgreSQLへ移行可能な設計)
+- [Prisma](https://www.prisma.io/) + PostgreSQL
 - [Anthropic TypeScript SDK](https://github.com/anthropics/anthropic-sdk-typescript) — モデル `claude-sonnet-5`、SSEストリーミング + tool use、prompt caching
 
-## セットアップ
+> ☁️ **インターネットに公開してどこからでも使いたい場合は [DEPLOY.md](./DEPLOY.md)（Firebaseへのデプロイ手順）を参照してください。**
+
+## セットアップ(ローカル開発)
 
 ```bash
 # 1. 依存関係のインストール
 npm install
 
-# 2. 環境変数の設定
+# 2. PostgreSQL を起動 (Docker)
+docker compose up -d
+
+# 3. 環境変数の設定
 cp .env.example .env
 #   AI GM機能を使う場合は .env の ANTHROPIC_API_KEY を設定してください
 #   (https://console.anthropic.com/ で取得。未設定でもAI GM以外は全機能動作します)
 
-# 3. データベースの初期化
-npx prisma migrate dev
+# 4. データベースの初期化
+npx prisma migrate deploy
 
-# 4. 開発サーバー起動
+# 5. 開発サーバー起動
 npm run dev
 ```
 
 http://localhost:3000 を開いてください。
+
+> Docker を使わない場合は、任意のPostgreSQLを用意して `.env` の `DATABASE_URL` を合わせてください。
 
 > **Note**: AI GMの応答はロングランニングなSSEストリーミングです。実行時間制限のあるサーバーレス環境ではなく、ローカルまたはセルフホスト環境での利用を想定しています。立ち絵画像も `public/uploads/` に保存されるため、エフェメラルなファイルシステムの環境では永続しません(SQLiteと同じ制約です)。
 >

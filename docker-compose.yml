@@ -1,0 +1,19 @@
+# ローカル開発用のPostgres。本番はNeonなどのマネージドPostgresを使う。
+# 起動: docker compose up -d
+# .env の DATABASE_URL を下記に合わせる:
+#   DATABASE_URL="postgresql://trpg:trpg@localhost:5432/trpg?schema=public"
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: trpg
+      POSTGRES_PASSWORD: trpg
+      POSTGRES_DB: trpg
+    ports:
+      - "5432:5432"
+    volumes:
+      - trpg-pgdata:/var/lib/postgresql/data
+
+volumes:
+  trpg-pgdata:

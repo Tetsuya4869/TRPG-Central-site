@@ -1,9 +1,11 @@
 generator client {
   provider = "prisma-client-js"
+  // native = ローカル開発。debian-openssl系 = Firebase App Hosting/Cloud Run のランタイム
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
