@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import "./globals.css";
 import { PwaRegister } from "@/components/PwaRegister";
+import { LogoutButton } from "@/components/LogoutButton";
 
 export const metadata: Metadata = {
   title: "TRPG Central",
@@ -56,6 +57,11 @@ export default function RootLayout({
                 </Link>
               ))}
             </nav>
+            {process.env.APP_PASSWORD && (
+              <div className="ml-auto text-sm">
+                <LogoutButton />
+              </div>
+            )}
           </div>
         </header>
         <main className="mx-auto w-full max-w-5xl px-4 py-8 flex-1">
