@@ -1,17 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { imageUrlSchema } from "@/lib/upload";
 
 const assetUpdateSchema = z.object({
   kind: z.enum(["NPC", "HANDOUT"]).optional(),
   name: z.string().min(1).max(100).optional(),
   content: z.string().min(1).max(10000).optional(),
-  imageUrl: z
-    .string()
-    .max(300)
-    .regex(/^\/uploads\//)
-    .optional()
-    .nullable(),
+  imageUrl: imageUrlSchema.optional().nullable(),
 });
 
 type Params = { params: Promise<{ id: string; assetId: string }> };

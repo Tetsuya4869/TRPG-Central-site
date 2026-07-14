@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { weaponsSchema } from "@/lib/weapons";
+import { imageUrlSchema } from "@/lib/upload";
 
 // 技能名 → 現在値 のマップ (Character.skillsJson の中身)
 export const skillsSchema = z.record(z.string(), z.number().int().min(0).max(100));
@@ -56,13 +57,8 @@ export const characterInputSchema = statBlockSchema.extend({
   occupation: z.string().max(100).optional().nullable(),
   age: z.number().int().min(1).max(999).optional().nullable(),
   sex: z.string().max(20).optional().nullable(),
-  // ローカルアップロードの相対パスのみ許可 (javascript:等の混入防止)
-  imageUrl: z
-    .string()
-    .max(300)
-    .regex(/^\/uploads\//, "画像URLが不正です")
-    .optional()
-    .nullable(),
+  // ローカル(/uploads/…) または Firebase Storage の公開URLのみ許可 (javascript:等の混入防止)
+  imageUrl: imageUrlSchema.optional().nullable(),
   skills: skillsSchema.default({}),
   weapons: weaponsSchema.default([]),
   memo: z.string().max(10000).optional().nullable(),

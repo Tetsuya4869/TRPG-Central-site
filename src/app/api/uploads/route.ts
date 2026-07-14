@@ -1,9 +1,8 @@
 // キャラ立ち絵のアップロード。ファイル名は完全サーバー生成でパストラバーサルを根絶し、
 // MIMEはヘッダ申告+マジックバイトの二重チェックを行う。
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
 import crypto from "crypto";
+import { saveUpload } from "@/lib/upload-storage";
 
 export const runtime = "nodejs";
 
@@ -82,9 +81,14 @@ export async function POST(req: NextRequest) {
   }
 
   const filename = `${crypto.randomUUID()}.${ext}`;
-  const dir = path.join(process.cwd(), "public", "uploads");
-  await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, filename), bytes);
-
-  return NextResponse.json({ url: `/uploads/${filename}` }, { status: 201 });
+  try {
+    const url = await saveUpload(filename, bytes, file.type);
+    return NextResponse.json({ url }, { status: 201 });
+  } catch (e) {
+    console.error("画像アップロードに失敗:", e);
+    return NextResponse.json(
+      { error: "画像の保存に失敗しました" },
+      { status: 500 },
+    );
+  }
 }
