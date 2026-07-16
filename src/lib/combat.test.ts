@@ -5,8 +5,12 @@ import {
   nextTurn,
   prevTurn,
   resolveAttack,
+  canFire,
+  consumeAmmo,
+  reloadWeapon,
   type CombatState,
   type Combatant,
+  type CombatantWeapon,
 } from "./combat";
 
 const c = (id: string, dex: number): Combatant => ({
@@ -83,6 +87,47 @@ describe("combatStateSchema round-trip", () => {
     };
     const parsed = combatStateSchema.parse(JSON.parse(JSON.stringify(state)));
     expect(parsed).toEqual(state);
+  });
+});
+
+describe("状態異常・装弾 (K3)", () => {
+  it("statuses/ammo付き戦闘員をround-tripできる", () => {
+    const state: CombatState = {
+      round: 1,
+      turnIndex: 0,
+      combatants: [
+        {
+          ...c("刑事", 12),
+          statuses: ["重傷", "拘束"],
+          weapons: [
+            { name: "拳銃", skillName: "拳銃", damage: "1d10", skillValue: 45, ammo: 4, maxAmmo: 6 },
+          ],
+        },
+      ],
+    };
+    const parsed = combatStateSchema.parse(JSON.parse(JSON.stringify(state)));
+    expect(parsed).toEqual(state);
+  });
+
+  const gun: CombatantWeapon = {
+    name: "拳銃", skillName: "拳銃", damage: "1d10", skillValue: 45, ammo: 1, maxAmmo: 6,
+  };
+
+  it("canFire: 残弾1は可、0は不可、弾数管理なしは常に可", () => {
+    expect(canFire(gun)).toBe(true);
+    expect(canFire({ ...gun, ammo: 0 })).toBe(false);
+    expect(canFire({ ...gun, ammo: undefined })).toBe(true);
+  });
+
+  it("consumeAmmo: 1発減る。0未満にはならない。管理なしは変化なし", () => {
+    expect(consumeAmmo(gun).ammo).toBe(0);
+    expect(consumeAmmo({ ...gun, ammo: 0 }).ammo).toBe(0);
+    expect(consumeAmmo({ ...gun, ammo: undefined }).ammo).toBeUndefined();
+  });
+
+  it("reloadWeapon: maxAmmoまで戻す。maxAmmoなしは変化なし", () => {
+    expect(reloadWeapon({ ...gun, ammo: 0 }).ammo).toBe(6);
+    expect(reloadWeapon({ ...gun, ammo: 0, maxAmmo: undefined }).ammo).toBe(0);
   });
 });
 

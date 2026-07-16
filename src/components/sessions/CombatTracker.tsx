@@ -9,6 +9,10 @@ import {
   prevTurn,
   emptyCombat,
   resolveAttack,
+  STATUS_PRESETS,
+  canFire,
+  consumeAmmo,
+  reloadWeapon,
   type CombatState,
   type Combatant,
   type CombatantWeapon,
@@ -91,6 +95,17 @@ export function CombatTracker({
   const [nwName, setNwName] = useState("");
   const [nwSkill, setNwSkill] = useState("");
   const [nwDamage, setNwDamage] = useState("");
+  const [nwAmmo, setNwAmmo] = useState("");
+  // 状態異常パネル: どの戦闘員のパネルを開いているか / 自由入力
+  const [statusFor, setStatusFor] = useState<string | null>(null);
+  const [statusInput, setStatusInput] = useState("");
+  // 応急手当: 実行中の戦闘員ID / 回復結果の短時間表示 / エラー
+  const [healBusy, setHealBusy] = useState<string | null>(null);
+  const [healFlash, setHealFlash] = useState<{
+    name: string;
+    amount: number;
+  } | null>(null);
+  const [healError, setHealError] = useState("");
 
   // 最新のcombatを参照するためのref (debounce保存が古いstateを送らないように)
   const combatRef = useRef<CombatState | null>(combat);
@@ -101,12 +116,15 @@ export function CombatTracker({
   const hpSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 「✓ 保存」表示を消すタイマー
   const savedFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 「🩹 +N」表示を消すタイマー
+  const healFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // アンマウント時にタイマーを破棄
   useEffect(() => {
     return () => {
       if (hpSaveTimer.current) clearTimeout(hpSaveTimer.current);
       if (savedFlashTimer.current) clearTimeout(savedFlashTimer.current);
+      if (healFlashTimer.current) clearTimeout(healFlashTimer.current);
     };
   }, []);
 
@@ -148,17 +166,9 @@ export function CombatTracker({
     await persistRemote(state);
   }
 
-  // HP増減: ローカルへ即時反映し、保存はdebounceでまとめて1回のPUTにする
+  // ローカルへ即時反映し、保存はdebounceでまとめて1回のPUTにする共通処理
   // (連続クリックでPUTが並走し、古い応答で巻き戻る問題への対策)
-  function changeHp(id: string, delta: number) {
-    const current = combatRef.current;
-    if (!current) return;
-    const next: CombatState = {
-      ...current,
-      combatants: current.combatants.map((c) =>
-        c.id === id ? { ...c, hp: c.hp + delta } : c,
-      ),
-    };
+  function applyDebounced(next: CombatState) {
     combatRef.current = next;
     setCombat(next);
     if (hpSaveTimer.current) clearTimeout(hpSaveTimer.current);
@@ -166,6 +176,110 @@ export function CombatTracker({
       hpSaveTimer.current = null;
       persistRemote(combatRef.current);
     }, 500);
+  }
+
+  // HP増減: debounce保存 (applyDebounced) に載せる
+  function changeHp(id: string, delta: number) {
+    const current = combatRef.current;
+    if (!current) return;
+    applyDebounced({
+      ...current,
+      combatants: current.combatants.map((c) =>
+        c.id === id ? { ...c, hp: c.hp + delta } : c,
+      ),
+    });
+  }
+
+  // 状態異常を付与する (重複・8個超・長さ超過は無視)
+  function addStatus(id: string, status: string) {
+    const s = status.trim();
+    const current = combatRef.current;
+    if (!current || !s || s.length > 20) return;
+    const target = current.combatants.find((c) => c.id === id);
+    if (!target) return;
+    const statuses = target.statuses ?? [];
+    if (statuses.includes(s) || statuses.length >= 8) return;
+    persist({
+      ...current,
+      combatants: current.combatants.map((c) =>
+        c.id === id ? { ...c, statuses: [...statuses, s] } : c,
+      ),
+    });
+  }
+
+  // 状態異常を解除する
+  function removeStatus(id: string, status: string) {
+    const current = combatRef.current;
+    if (!current) return;
+    persist({
+      ...current,
+      combatants: current.combatants.map((c) =>
+        c.id === id
+          ? { ...c, statuses: (c.statuses ?? []).filter((s) => s !== status) }
+          : c,
+      ),
+    });
+  }
+
+  // 応急手当: サーバーで1d3を振って履歴化し、その結果をHP回復に使う
+  // (クライアントで振り直すと二重ロールになるためサーバーロールのみ)
+  async function firstAid(combatant: Combatant) {
+    if (healBusy) return;
+    setHealBusy(combatant.id);
+    setHealError("");
+    try {
+      const res = await fetch("/api/dice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          expression: "1d3",
+          context: `応急手当 (${combatant.name})`,
+          gameSessionId: sessionId,
+          characterId: combatant.characterId ?? undefined,
+          characterName: combatant.name,
+        }),
+      });
+      if (!res.ok) {
+        setHealError("応急手当に失敗しました");
+        return;
+      }
+      const data: { total?: number } = await res.json();
+      const total = typeof data.total === "number" ? data.total : 0;
+      // maxHp を超えない分だけ回復する
+      const latest = combatRef.current?.combatants.find(
+        (c) => c.id === combatant.id,
+      );
+      const healed = latest
+        ? Math.min(total, Math.max(0, latest.maxHp - latest.hp))
+        : 0;
+      if (healed > 0) changeHp(combatant.id, +healed);
+      setHealFlash({ name: combatant.name, amount: healed });
+      if (healFlashTimer.current) clearTimeout(healFlashTimer.current);
+      healFlashTimer.current = setTimeout(() => setHealFlash(null), 2500);
+    } catch {
+      setHealError("応急手当に失敗しました");
+    } finally {
+      setHealBusy(null);
+    }
+  }
+
+  // 武器をリロードする (maxAmmo がある武器のみ)
+  function reloadWeaponAt(combatantId: string, weaponIdx: number) {
+    const current = combatRef.current;
+    if (!current) return;
+    persist({
+      ...current,
+      combatants: current.combatants.map((c) =>
+        c.id === combatantId
+          ? {
+              ...c,
+              weapons: (c.weapons ?? []).map((w, i) =>
+                i === weaponIdx ? reloadWeapon(w) : w,
+              ),
+            }
+          : c,
+      ),
+    });
   }
 
   function addPc(pc: CombatPc) {
@@ -239,6 +353,11 @@ export function CombatTracker({
     const weapon = attacker.weapons?.[weaponIdx];
     const target = combat?.combatants.find((c) => c.id === targetId);
     if (!weapon || !target || attackBusy) return;
+    // 弾数管理武器は残弾がないと撃てない
+    if (!canFire(weapon)) {
+      setAttackError("弾切れです。リロードしてください");
+      return;
+    }
     setAttackBusy(true);
     setAttackError("");
     try {
@@ -250,6 +369,24 @@ export function CombatTracker({
         attacker.damageBonus ?? "±0",
       );
       const dmgTotal = r.damage?.total ?? 0;
+
+      // 弾数消費: changeHp と同じ debounce 保存に載せるため、先に ref/state へ反映する
+      // (命中しなかった場合も弾数変更を保存する)
+      if (weapon.ammo != null && combatRef.current) {
+        applyDebounced({
+          ...combatRef.current,
+          combatants: combatRef.current.combatants.map((c) =>
+            c.id === attacker.id
+              ? {
+                  ...c,
+                  weapons: (c.weapons ?? []).map((w, i) =>
+                    i === weaponIdx ? consumeAmmo(w) : w,
+                  ),
+                }
+              : c,
+          ),
+        });
+      }
 
       // 履歴化 (卓ログに紐付け)。命中判定は失敗も記録、ダメージは命中時のみ。
       const record = (payload: Record<string, unknown>) =>
@@ -343,6 +480,14 @@ export function CombatTracker({
           {saveError && (
             <span className="ml-2 text-xs text-red-400">{saveError}</span>
           )}
+          {healFlash && (
+            <span className="ml-2 text-xs text-emerald-400">
+              🩹 {healFlash.name} +{healFlash.amount}
+            </span>
+          )}
+          {healError && (
+            <span className="ml-2 text-xs text-red-400">{healError}</span>
+          )}
         </h2>
         <div className="flex gap-2">
           <button
@@ -433,10 +578,35 @@ export function CombatTracker({
                   >
                     {combatant.name}
                   </span>
+                  {/* 状態異常チップ (クリックで解除) */}
+                  {(combatant.statuses ?? []).map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => removeStatus(combatant.id, s)}
+                      aria-label={`${s}を解除`}
+                      title="クリックで解除"
+                      className="rounded-full border border-amber-800 bg-amber-950/40 px-2 py-0.5 text-[10px] text-amber-300 hover:border-red-500 hover:text-red-300"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => {
+                      setStatusFor(statusFor === combatant.id ? null : combatant.id);
+                      setAttackFor(null);
+                      setPickWeapon(null);
+                    }}
+                    aria-label={`${combatant.name}の状態異常`}
+                    className="rounded border border-amber-900/60 px-2 h-8 text-xs text-amber-300 hover:bg-amber-950/40"
+                    title="状態異常"
+                  >
+                    +状態
+                  </button>
                   <button
                     onClick={() => {
                       setAttackFor(attackFor === combatant.id ? null : combatant.id);
                       setPickWeapon(null);
+                      setStatusFor(null);
                     }}
                     disabled={combatant.hp <= 0}
                     aria-label={`${combatant.name}の攻撃`}
@@ -444,6 +614,15 @@ export function CombatTracker({
                     title="攻撃"
                   >
                     ⚔️
+                  </button>
+                  <button
+                    onClick={() => firstAid(combatant)}
+                    disabled={healBusy !== null || saving}
+                    aria-label="応急手当"
+                    className="rounded border border-emerald-900/60 px-2 h-8 text-xs text-emerald-300 hover:bg-emerald-950/50 disabled:opacity-30"
+                    title="応急手当 (1d3回復)"
+                  >
+                    🩹
                   </button>
                   <span className="flex items-center gap-1 ml-auto">
                     <button
@@ -488,6 +667,45 @@ export function CombatTracker({
                   </button>
                 </div>
 
+                {/* 状態異常パネル: プリセットのワンタップ付与 + 自由入力 */}
+                {statusFor === combatant.id && (
+                  <div className="border-t border-zinc-800 px-3 py-2 space-y-2 text-xs">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-zinc-500">状態異常:</span>
+                      {STATUS_PRESETS.map((preset) => (
+                        <button
+                          key={preset}
+                          onClick={() => addStatus(combatant.id, preset)}
+                          disabled={
+                            saving ||
+                            (combatant.statuses ?? []).includes(preset)
+                          }
+                          className="rounded border border-amber-900/60 px-2 py-1 text-amber-300 hover:bg-amber-950/40 disabled:opacity-30"
+                        >
+                          {preset}
+                        </button>
+                      ))}
+                      <input
+                        value={statusInput}
+                        onChange={(e) => setStatusInput(e.target.value)}
+                        placeholder="自由入力"
+                        maxLength={20}
+                        className="w-24 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 focus:border-amber-500 focus:outline-none"
+                      />
+                      <button
+                        onClick={() => {
+                          addStatus(combatant.id, statusInput);
+                          setStatusInput("");
+                        }}
+                        disabled={!statusInput.trim() || saving}
+                        className="rounded border border-zinc-700 px-2 py-1 hover:border-amber-500 disabled:opacity-50"
+                      >
+                        付与
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* 攻撃パネル: 武器選択 → 対象選択 */}
                 {attackFor === combatant.id && (
                   <div className="border-t border-zinc-800 px-3 py-2 space-y-2 text-xs">
@@ -495,17 +713,39 @@ export function CombatTracker({
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className="text-zinc-500">武器:</span>
                         {(combatant.weapons ?? []).map((w, wi) => (
-                          <button
-                            key={wi}
-                            onClick={() => setPickWeapon(wi)}
-                            className={`rounded border px-2 py-1 ${
-                              pickWeapon === wi
-                                ? "border-red-500 bg-red-950/40 text-red-200"
-                                : "border-zinc-700 text-zinc-300 hover:border-red-500"
-                            }`}
-                          >
-                            {w.name} <span className="text-zinc-500">({w.skillValue}% / {w.damage})</span>
-                          </button>
+                          <span key={wi} className="flex items-center gap-1">
+                            <button
+                              onClick={() => setPickWeapon(wi)}
+                              className={`rounded border px-2 py-1 ${
+                                pickWeapon === wi
+                                  ? "border-red-500 bg-red-950/40 text-red-200"
+                                  : "border-zinc-700 text-zinc-300 hover:border-red-500"
+                              }`}
+                            >
+                              {w.name} <span className="text-zinc-500">({w.skillValue}% / {w.damage})</span>
+                              {w.ammo != null && (
+                                <span
+                                  className={
+                                    w.ammo <= 0 ? "text-red-400" : "text-zinc-500"
+                                  }
+                                >
+                                  {" "}
+                                  (残弾 {w.ammo}
+                                  {w.maxAmmo != null && `/${w.maxAmmo}`})
+                                </span>
+                              )}
+                            </button>
+                            {w.maxAmmo != null && (
+                              <button
+                                onClick={() => reloadWeaponAt(combatant.id, wi)}
+                                disabled={saving || w.ammo === w.maxAmmo}
+                                aria-label={`${w.name}をリロード`}
+                                className="rounded border border-zinc-700 px-2 py-1 text-zinc-400 hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-30"
+                              >
+                                リロード
+                              </button>
+                            )}
+                          </span>
                         ))}
                       </div>
                     ) : (
@@ -537,19 +777,37 @@ export function CombatTracker({
                           placeholder="ダメージ (1d6)"
                           className="w-24 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 font-mono focus:border-red-500 focus:outline-none"
                         />
+                        <input
+                          value={nwAmmo}
+                          onChange={(e) => setNwAmmo(e.target.value)}
+                          placeholder="装弾数"
+                          inputMode="numeric"
+                          className="w-16 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 focus:border-red-500 focus:outline-none"
+                        />
                         <button
                           onClick={() => {
                             const sv = Math.max(0, Math.min(100, parseInt(nwSkill, 10) || 0));
                             if (!nwName.trim() || !nwDamage.trim()) return;
+                            // 装弾数が入力されていれば ammo=maxAmmo=値、空なら弾数管理なし
+                            const ammoN = parseInt(nwAmmo, 10);
+                            const ammoFields =
+                              Number.isFinite(ammoN) && ammoN >= 1
+                                ? {
+                                    ammo: Math.min(999, ammoN),
+                                    maxAmmo: Math.min(999, ammoN),
+                                  }
+                                : {};
                             addNpcWeapon(combatant.id, {
                               name: nwName.trim(),
                               skillName: nwName.trim(),
                               damage: nwDamage.trim(),
                               skillValue: sv,
+                              ...ammoFields,
                             });
                             setNwName("");
                             setNwSkill("");
                             setNwDamage("");
+                            setNwAmmo("");
                           }}
                           className="rounded border border-zinc-700 px-2 py-1 hover:border-red-500"
                         >

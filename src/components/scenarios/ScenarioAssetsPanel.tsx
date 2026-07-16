@@ -32,6 +32,9 @@ export function ScenarioAssetsPanel({
   // 削除確認待ちの資料 (nullでなければダイアログ表示)
   const [deleteTarget, setDeleteTarget] = useState<ScenarioAssetRecord | null>(null);
   const [deleteError, setDeleteError] = useState("");
+  // AI NPC生成
+  const [npcRole, setNpcRole] = useState("");
+  const [generating, setGenerating] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/scenarios/${scenarioId}/assets`);
@@ -57,6 +60,33 @@ export function ScenarioAssetsPanel({
       setImageUrl(data.url);
     } finally {
       setUploading(false);
+    }
+  }
+
+  // 役どころを指定してAIでNPCを生成→資料に追加
+  async function generateNpcAsset() {
+    const role = npcRole.trim();
+    if (!role || generating) return;
+    setGenerating(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/scenarios/${scenarioId}/assets/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "NPCの生成に失敗しました");
+        return;
+      }
+      setNpcRole("");
+      setTab("NPC");
+      await load();
+    } catch {
+      setError("通信エラーが発生しました");
+    } finally {
+      setGenerating(false);
     }
   }
 
@@ -136,6 +166,27 @@ export function ScenarioAssetsPanel({
           </button>
         )}
       </div>
+
+      {/* AIでNPCを生成 (役どころを指定するだけ) */}
+      {!readOnly && tab === "NPC" && (
+        <div className="flex gap-2">
+          <input
+            value={npcRole}
+            onChange={(e) => setNpcRole(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && generateNpcAsset()}
+            placeholder="🤖 役どころを入力してAIでNPC生成 (例: 怪しい骨董屋の主人)"
+            maxLength={200}
+            className="flex-1 rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm focus:border-purple-500 focus:outline-none"
+          />
+          <button
+            onClick={generateNpcAsset}
+            disabled={generating || !npcRole.trim()}
+            className="rounded border border-purple-700 px-3 py-1.5 text-sm text-purple-300 hover:bg-purple-950/50 disabled:opacity-50"
+          >
+            {generating ? "生成中…" : "生成"}
+          </button>
+        </div>
+      )}
 
       {!readOnly && showForm && (
         <div className="rounded border border-zinc-800 bg-zinc-950/50 p-3 space-y-2">

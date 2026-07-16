@@ -8,8 +8,14 @@ import { judgeOutcomeFor, type Edition } from "@/lib/coc";
 // weapon.skillName は表示用。実際の命中目標値は skillValue を使う (シート参照に依存しない)。
 export const combatantWeaponSchema = weaponSchema.extend({
   skillValue: z.number().int().min(0).max(100),
+  // 装弾管理 (任意)。ammo=現在弾数、maxAmmo=装填数。未設定なら弾数管理なし
+  ammo: z.number().int().min(0).max(999).optional(),
+  maxAmmo: z.number().int().min(1).max(999).optional(),
 });
 export type CombatantWeapon = z.infer<typeof combatantWeaponSchema>;
+
+// 状態異常のプリセット (自由入力も可)
+export const STATUS_PRESETS = ["発狂", "重傷", "拘束", "転倒", "毒", "隠密"] as const;
 
 export const combatantSchema = z.object({
   id: z.string().min(1),
@@ -24,6 +30,8 @@ export const combatantSchema = z.object({
   // ダメージボーナス (解決済みダメージ式に使う。例 "+1d4" / "±0")
   damageBonus: z.string().max(10).optional(),
   weapons: z.array(combatantWeaponSchema).max(20).optional(),
+  // 状態異常 (発狂・重傷・拘束など。プリセット+自由入力)
+  statuses: z.array(z.string().min(1).max(20)).max(8).optional(),
 });
 export type Combatant = z.infer<typeof combatantSchema>;
 
@@ -62,6 +70,21 @@ export function prevTurn(state: CombatState): CombatState {
     };
   }
   return { ...state, turnIndex: state.turnIndex - 1 };
+}
+
+// 弾数管理: 未設定 (ammo undefined) は常に発砲可
+export function canFire(weapon: CombatantWeapon): boolean {
+  return weapon.ammo == null || weapon.ammo > 0;
+}
+
+export function consumeAmmo(weapon: CombatantWeapon): CombatantWeapon {
+  if (weapon.ammo == null) return weapon;
+  return { ...weapon, ammo: Math.max(0, weapon.ammo - 1) };
+}
+
+export function reloadWeapon(weapon: CombatantWeapon): CombatantWeapon {
+  if (weapon.maxAmmo == null) return weapon;
+  return { ...weapon, ammo: weapon.maxAmmo };
 }
 
 // 命中判定でヒット扱いになる成功度 (attack APIと同一定義)
