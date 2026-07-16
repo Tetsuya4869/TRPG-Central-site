@@ -88,6 +88,38 @@ describe("executeGmTool", () => {
     expect(result.isError).toBeUndefined();
   });
 
+  it("spend_luck: 幸運を減算しnewMemberStateを返す (7版)", async () => {
+    const luckyMembers: MemberContext[] = [
+      { memberId: "m1", characterId: "c1", name: "花子", state: { ...state, luck: 40 } },
+    ];
+    const ctx7: GmToolContext = { aiGmSessionId: "s1", edition: "7", members: luckyMembers };
+    const result = await executeGmTool(
+      "spend_luck",
+      { character_name: "花子", points: 12, reason: "目星を成功に" },
+      ctx7,
+    );
+    const payload = JSON.parse(result.resultForModel);
+    expect(payload.ok).toBe(true);
+    expect(payload.luck_after).toBe(28);
+    expect(result.newMemberState?.state.luck).toBe(28);
+  });
+
+  it("spend_luck: 幸運不足はエラーでなくok:falseで返す (状態は変えない)", async () => {
+    const poorMembers: MemberContext[] = [
+      { memberId: "m1", characterId: "c1", name: "花子", state: { ...state, luck: 5 } },
+    ];
+    const ctx7: GmToolContext = { aiGmSessionId: "s1", edition: "7", members: poorMembers };
+    const result = await executeGmTool(
+      "spend_luck",
+      { character_name: "花子", points: 12, reason: "" },
+      ctx7,
+    );
+    const payload = JSON.parse(result.resultForModel);
+    expect(payload.ok).toBe(false);
+    expect(result.newMemberState).toBeUndefined();
+    expect(result.isError).toBeUndefined();
+  });
+
   it("不明な探索者名は is_error で有効名一覧を返す", async () => {
     const result = await executeGmTool(
       "request_skill_check",

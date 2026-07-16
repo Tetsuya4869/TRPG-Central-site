@@ -123,6 +123,35 @@ function buildBaseTools(edition: Edition): Anthropic.Tool[] {
       required: ["character_name", "loss_on_success", "loss_on_failure", "reason"],
     },
   },
+  // 7版のみ: 幸運消費 (プレイヤーが宣言したときに使う)
+  ...(isV7
+    ? ([
+        {
+          name: "spend_luck",
+          description:
+            "幸運ポイントを消費する (7版)。プレイヤーが「幸運を消費して失敗した判定を成功にする」と宣言したときに使う。消費コストは 出目−目標値。クリティカルやイクストリームへの格上げ、ファンブルの取り消しには使えない。消費後の幸運が判定の目標値としても使われることに注意。",
+          input_schema: {
+            type: "object" as const,
+            properties: {
+              character_name: {
+                type: "string",
+                description:
+                  "幸運を消費する探索者の名前。シート記載の名前を一字一句正確に指定する",
+              },
+              points: {
+                type: "integer",
+                description: "消費する幸運ポイント (出目−目標値)",
+              },
+              reason: {
+                type: "string",
+                description: "何の判定を成功にするための消費か",
+              },
+            },
+            required: ["character_name", "points", "reason"],
+          },
+        },
+      ] satisfies Anthropic.Tool[])
+    : []),
   {
     name: "madness_roll",
     description:
@@ -302,6 +331,55 @@ export async function executeGmTool(
         loss_expression: result.lossExpression,
         san_before: member.state.san,
         san_after: result.sanAfter,
+        reason,
+      };
+      return {
+        resultForModel: JSON.stringify(payload),
+        display: payload,
+        newMemberState: { memberId: member.memberId, state: newState },
+      };
+    }
+
+    case "spend_luck": {
+      const member = resolveMember(ctx.members, input.character_name);
+      if (!member) return unknownMemberResult(ctx.members, input.character_name);
+      const rawPoints = Number(input.points);
+      const points = Number.isFinite(rawPoints) ? Math.max(1, Math.round(rawPoints)) : 0;
+      const currentLuck = member.state.luck ?? 0;
+      if (points <= 0) {
+        return {
+          resultForModel: JSON.stringify({ error: "消費ポイントが不正です" }),
+          display: { tool: "error", message: "幸運消費のポイントが不正" },
+          isError: true,
+        };
+      }
+      if (currentLuck < points) {
+        // 幸運不足はエラーではなくルール上の結果としてモデルに伝える (演出に使える)
+        return {
+          resultForModel: JSON.stringify({
+            tool: "spend_luck",
+            character_name: member.name,
+            ok: false,
+            reason: `幸運が足りない (現在${currentLuck}、必要${points})`,
+          }),
+          display: {
+            tool: "spend_luck",
+            character_name: member.name,
+            ok: false,
+            points,
+            luck_after: currentLuck,
+          },
+        };
+      }
+      const newState: AiGmState = { ...member.state, luck: currentLuck - points };
+      const reason = String(input.reason ?? "");
+      const payload = {
+        tool: "spend_luck",
+        character_name: member.name,
+        ok: true,
+        points,
+        luck_before: currentLuck,
+        luck_after: currentLuck - points,
         reason,
       };
       return {

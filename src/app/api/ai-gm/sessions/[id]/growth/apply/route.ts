@@ -62,6 +62,8 @@ export async function POST(req: NextRequest, { params }: Params) {
             currentHp: state.data.hp,
             currentMp: state.data.mp,
             currentSan: state.data.san,
+            // 7版: プレイ中に消費した幸運もシートへ反映
+            ...(state.data.luck != null && { luck: state.data.luck }),
           }
         : {};
 

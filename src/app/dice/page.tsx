@@ -146,6 +146,46 @@ export default function DicePage() {
     roll({ expression: expr });
   }
 
+  // 7版: 失敗した判定に幸運を消費して成功へ変える
+  async function spendLuck() {
+    const character = characterChecks?.character;
+    if (!latest || !character || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/characters/${character.id}/spend-luck`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ diceRollId: latest.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "幸運の消費に失敗しました");
+        return;
+      }
+      setLatest(data.roll);
+      // 選択中キャラの幸運もローカル更新
+      setCharacters((prev) =>
+        prev.map((c) => (c.id === character.id ? { ...c, luck: data.luck } : c)),
+      );
+      await fetchHistory();
+    } catch {
+      setError("通信エラーが発生しました");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // 7版: プッシュロール (同じ判定にもう一度挑戦。失敗したら重い代償はKP裁量)
+  function pushRoll() {
+    if (!latest || latest.target == null) return;
+    roll({
+      target: latest.target,
+      context: `${(latest.context ?? "").replace(/ ?\(プッシュ\)/, "")} (プッシュ)`.trim(),
+      edition: "7",
+    });
+  }
+
   async function rollMadnessTable() {
     setBusy(true);
     setError("");
@@ -432,6 +472,41 @@ export default function DicePage() {
                 })()}
               </p>
               <OutcomeBadge outcome={latest.outcome} />
+              {/* 7版: 失敗した判定への幸運消費 / プッシュロール */}
+              {latest.outcome === "FAILURE" &&
+                latest.target != null &&
+                characterChecks?.edition === "7" && (
+                  <div className="flex flex-wrap justify-center gap-2 pt-1">
+                    {(() => {
+                      const cost = latest.total - (latest.target ?? 0);
+                      const luck = characterChecks.character.luck ?? 0;
+                      const spent = latest.context?.includes("(幸運") ?? false;
+                      if (spent || cost <= 0) return null;
+                      return (
+                        <button
+                          onClick={spendLuck}
+                          disabled={busy || luck < cost}
+                          title={
+                            luck < cost
+                              ? `幸運が足りません (必要${cost}、現在${luck})`
+                              : `幸運を${cost}消費して成功にします`
+                          }
+                          className="rounded border border-amber-700 px-3 py-1.5 text-xs text-amber-300 hover:bg-amber-950/50 disabled:opacity-40"
+                        >
+                          🍀 幸運で成功にする (−{cost} / 残{luck})
+                        </button>
+                      );
+                    })()}
+                    <button
+                      onClick={pushRoll}
+                      disabled={busy || (latest.context?.includes("(プッシュ)") ?? false)}
+                      title="同じ判定にもう一度挑戦します。失敗した場合はより重い代償を (プッシュ済みの判定は再プッシュ不可)"
+                      className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-red-500 disabled:opacity-40"
+                    >
+                      🎲 プッシュロール
+                    </button>
+                  </div>
+                )}
             </section>
           )}
         </div>

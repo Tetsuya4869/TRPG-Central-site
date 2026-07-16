@@ -45,6 +45,8 @@ function initialState(character: Character): AiGmState {
     maxMp: derived.mp,
     san: character.currentSan,
     maxSan: derived.maxSan,
+    // 7版のみ: 幸運消費 (spend_luck) 用に現在幸運をセッション状態で管理する
+    ...(character.edition === "7" && { luck: character.luck ?? 0 }),
   };
 }
 

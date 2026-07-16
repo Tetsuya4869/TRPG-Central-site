@@ -69,7 +69,7 @@ export const characterInputSchema = statBlockSchema.extend({
 });
 export type CharacterInput = z.infer<typeof characterInputSchema>;
 
-// AiGmSessionMember.stateJson の中身
+// AiGmSessionMember.stateJson の中身。luck は7版のみ (6版・旧データは undefined)
 export const aiGmStateSchema = z.object({
   hp: z.number().int(),
   maxHp: z.number().int(),
@@ -77,6 +77,7 @@ export const aiGmStateSchema = z.object({
   maxMp: z.number().int(),
   san: z.number().int(),
   maxSan: z.number().int(),
+  luck: z.number().int().optional(),
 });
 export type AiGmState = z.infer<typeof aiGmStateSchema>;
 

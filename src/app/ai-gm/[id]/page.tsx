@@ -21,6 +21,7 @@ interface GmState {
   maxMp: number;
   san: number;
   maxSan: number;
+  luck?: number; // 7版のみ
 }
 
 interface SessionMember {
@@ -82,6 +83,28 @@ function ToolCard({ data }: { data: Record<string, unknown> }) {
           SAN {String(data.san_before)} → {String(data.san_after)} (-
           {String(data.loss)})
         </span>
+      </div>
+    );
+  }
+  if (tool === "spend_luck") {
+    return (
+      <div className="mx-auto flex items-center gap-3 rounded-lg border border-amber-800/60 bg-amber-950/30 px-4 py-2 text-sm">
+        <span>🍀</span>
+        {who}
+        <span className="text-zinc-300">幸運消費</span>
+        {data.ok ? (
+          <>
+            <span className="font-mono text-lg font-bold text-amber-300">
+              -{String(data.points)}
+            </span>
+            <span className="text-zinc-400">
+              幸運 {String(data.luck_before)} → {String(data.luck_after)}
+            </span>
+            <span className="text-emerald-300">成功に変更!</span>
+          </>
+        ) : (
+          <span className="text-red-300">幸運が足りない…</span>
+        )}
       </div>
     );
   }
@@ -581,6 +604,9 @@ export default function AiGmPlayPage({
                   <StatBar label="HP" current={memberState.hp} max={memberState.maxHp} color="bg-red-500" />
                   <StatBar label="MP" current={memberState.mp} max={memberState.maxMp} color="bg-blue-500" />
                   <StatBar label="SAN" current={memberState.san} max={memberState.maxSan} color="bg-purple-500" />
+                  {memberState.luck != null && (
+                    <StatBar label="幸運" current={memberState.luck} max={99} color="bg-amber-500" />
+                  )}
                 </>
               )}
             </section>

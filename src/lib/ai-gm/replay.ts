@@ -25,6 +25,11 @@ function formatToolLine(data: Record<string, unknown>): string {
   if (tool === "madness_roll") {
     return `> 🌀 ${who}**狂気表** — 出目 ${data.roll} → **${data.title}** (持続: ${data.duration})`;
   }
+  if (tool === "spend_luck") {
+    return data.ok
+      ? `> 🍀 ${who}**幸運消費** — ${data.points}ポイント (幸運 ${data.luck_before} → ${data.luck_after})、判定を成功に変更`
+      : `> 🍀 ${who}**幸運消費** — 失敗 (幸運不足)`;
+  }
   return `> 🎲 ${who}${data.reason ? `**${data.reason}** — ` : ""}${data.expression} → **${data.total}**`;
 }
 
