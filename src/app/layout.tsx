@@ -56,6 +56,13 @@ export default function RootLayout({
                   {item.label}
                 </Link>
               ))}
+              {/* 静的HTML (public/manual.html) なので Link ではなく a で遷移する */}
+              <a
+                href="/manual.html"
+                className="text-zinc-300 hover:text-emerald-300 transition-colors whitespace-nowrap"
+              >
+                説明書
+              </a>
             </nav>
             {process.env.APP_PASSWORD && (
               <div className="ml-auto text-sm">

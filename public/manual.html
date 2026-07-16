@@ -1,0 +1,811 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TRPG Central 説明書</title>
+<meta name="description" content="TRPG Central の使い方ガイド" />
+<style>
+  :root {
+    --bg: #09090b;
+    --surface: #18181b;
+    --surface2: #101012;
+    --border: #27272a;
+    --border-soft: #1f1f23;
+    --ink: #f4f4f5;
+    --ink2: #a1a1aa;
+    --ink3: #71717a;
+    --accent: #34d399;
+    --accent-deep: #059669;
+    --purple: #c084fc;
+    --amber: #fbbf24;
+    --red: #f87171;
+    --sidebar-w: 250px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Noto Sans JP", Meiryo, system-ui, sans-serif;
+    line-height: 1.75;
+  }
+
+  /* ===== レイアウト ===== */
+  .app { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: var(--sidebar-w);
+    flex-shrink: 0;
+    background: var(--surface2);
+    border-right: 1px solid var(--border);
+    position: fixed;
+    top: 0; bottom: 0; left: 0;
+    overflow-y: auto;
+    padding: 20px 14px 30px;
+    z-index: 30;
+    transition: transform .25s ease;
+  }
+  .main {
+    flex: 1;
+    margin-left: var(--sidebar-w);
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .content {
+    width: 100%;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 40px 28px 80px;
+    flex: 1;
+  }
+
+  /* ===== サイドバー ===== */
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 10px 18px;
+  }
+  .logo .mark {
+    width: 38px; height: 38px; border-radius: 10px;
+    background: linear-gradient(135deg, #059669, #10b98155);
+    display: grid; place-items: center;
+    font-size: 20px;
+    box-shadow: 0 0 18px #05966944;
+  }
+  .logo .name { font-weight: 700; letter-spacing: .03em; color: var(--accent); }
+  .logo .sub { font-size: 11px; color: var(--ink3); display: block; letter-spacing: .05em; }
+
+  .search {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--ink);
+    padding: 7px 12px;
+    font-size: 13px;
+    margin-bottom: 16px;
+    outline: none;
+  }
+  .search:focus { border-color: var(--accent-deep); }
+  .search::placeholder { color: var(--ink3); }
+
+  .nav-group { margin-bottom: 14px; }
+  .nav-group > .gtitle {
+    font-size: 11px; color: var(--ink3);
+    letter-spacing: .12em;
+    padding: 4px 10px;
+    text-transform: uppercase;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 9px;
+    padding: 7px 10px;
+    margin: 1px 0;
+    border-radius: 8px;
+    color: var(--ink2);
+    text-decoration: none;
+    font-size: 14px;
+    border-left: 2px solid transparent;
+    transition: background .15s, color .15s;
+  }
+  .nav-item:hover { background: #ffffff0a; color: var(--ink); }
+  .nav-item.active {
+    background: #05966922;
+    color: var(--accent);
+    border-left-color: var(--accent);
+    font-weight: 600;
+  }
+  .nav-item.hidden { display: none; }
+  .nav-item .em { width: 20px; text-align: center; }
+
+  /* ===== モバイルトップバー ===== */
+  .topbar {
+    display: none;
+    position: sticky; top: 0; z-index: 20;
+    background: #09090bd9;
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    align-items: center; gap: 12px;
+  }
+  .topbar button {
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--ink); border-radius: 8px;
+    width: 38px; height: 38px; font-size: 17px; cursor: pointer;
+  }
+  .topbar .t { font-weight: 700; color: var(--accent); }
+  .overlay {
+    display: none; position: fixed; inset: 0;
+    background: #00000088; z-index: 25;
+  }
+
+  /* ===== ページ ===== */
+  .page { display: none; }
+  .page.show { display: block; animation: pagein .3s ease; }
+  @keyframes pagein {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .page.show { animation: none; }
+  }
+
+  .crumb { font-size: 12px; color: var(--ink3); letter-spacing: .08em; margin-bottom: 6px; }
+  h1 { font-size: 30px; margin: 0 0 6px; line-height: 1.3; }
+  .lead { color: var(--ink2); margin: 0 0 28px; font-size: 15px; }
+  h2 {
+    font-size: 19px; margin: 38px 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  h3 { font-size: 15.5px; margin: 24px 0 8px; color: var(--accent); }
+  p { margin: 10px 0; font-size: 14.5px; }
+  ul { margin: 8px 0; padding-left: 22px; }
+  li { font-size: 14.5px; margin: 5px 0; }
+  strong { color: var(--ink); }
+  code {
+    background: #ffffff10; border: 1px solid var(--border);
+    border-radius: 5px; padding: 1px 6px;
+    font-size: 12.5px; font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+    color: #a7f3d0;
+  }
+
+  /* ===== 部品 ===== */
+  .badge {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    border-radius: 999px; padding: 1px 10px;
+    vertical-align: 2px; margin-left: 6px;
+    letter-spacing: .02em;
+  }
+  .badge.api { background: #a855f722; color: var(--purple); border: 1px solid #a855f755; }
+  .badge.v7  { background: #f59e0b22; color: var(--amber);  border: 1px solid #f59e0b55; }
+  .badge.new { background: #05966922; color: var(--accent); border: 1px solid #05966966; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin: 16px 0; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .card .ci { font-size: 22px; }
+  .card .ct { font-weight: 700; margin: 6px 0 4px; font-size: 14.5px; }
+  .card .cd { font-size: 13px; color: var(--ink2); margin: 0; }
+  a.card { text-decoration: none; color: inherit; transition: border-color .15s, transform .15s; display: block; }
+  a.card:hover { border-color: var(--accent-deep); transform: translateY(-2px); }
+
+  .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 16px 0; }
+  .flow .step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    flex: 1 1 150px;
+    min-width: 140px;
+    position: relative;
+  }
+  .flow .step .n {
+    display: inline-grid; place-items: center;
+    width: 20px; height: 20px;
+    background: var(--accent-deep); color: #fff;
+    border-radius: 999px; font-size: 11px; font-weight: 700;
+    margin-right: 6px;
+  }
+  .flow .arrow { align-self: center; color: var(--ink3); font-size: 16px; }
+
+  .tip, .warn {
+    border-radius: 10px; padding: 12px 16px; margin: 14px 0;
+    font-size: 13.5px;
+  }
+  .tip  { background: #05966914; border: 1px solid #05966944; }
+  .warn { background: #f59e0b12; border: 1px solid #f59e0b44; }
+  .tip::before  { content: "💡 "; }
+  .warn::before { content: "⚠️ "; }
+
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--surface); color: var(--ink2); font-size: 12.5px; white-space: nowrap; }
+  td { background: #ffffff05; }
+  .tablewrap { overflow-x: auto; }
+
+  kbd {
+    background: var(--surface); border: 1px solid var(--border);
+    border-bottom-width: 2px; border-radius: 5px;
+    padding: 1px 7px; font-size: 12px; font-family: inherit;
+  }
+
+  /* ===== 前後ナビ ===== */
+  .pager { display: flex; gap: 12px; margin-top: 52px; }
+  .pager a {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    text-decoration: none;
+    color: var(--ink);
+    transition: border-color .15s;
+  }
+  .pager a:hover { border-color: var(--accent-deep); }
+  .pager .dir { font-size: 11.5px; color: var(--ink3); display: block; }
+  .pager .pt { font-weight: 700; font-size: 14px; }
+  .pager .next { text-align: right; }
+  .pager .spacer { flex: 1; visibility: hidden; }
+
+  footer.doc {
+    border-top: 1px solid var(--border-soft);
+    text-align: center; color: var(--ink3);
+    font-size: 12px; padding: 18px;
+  }
+
+  /* ===== ホームヒーロー ===== */
+  .hero {
+    background: radial-gradient(1200px 400px at 20% -10%, #05966926, transparent),
+                var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 34px 32px;
+    margin-bottom: 26px;
+  }
+  .hero h1 { font-size: 32px; }
+  .hero .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .hero .tag {
+    font-size: 12px; padding: 3px 12px; border-radius: 999px;
+    background: #ffffff0a; border: 1px solid var(--border); color: var(--ink2);
+  }
+
+  @media (max-width: 900px) {
+    .sidebar { transform: translateX(-100%); }
+    .sidebar.open { transform: none; box-shadow: 12px 0 40px #000a; }
+    .overlay.open { display: block; }
+    .main { margin-left: 0; }
+    .topbar { display: flex; }
+    .content { padding: 28px 18px 60px; }
+    h1 { font-size: 24px; }
+    .hero { padding: 24px 20px; }
+    .pager { flex-direction: column; }
+    .flow .arrow { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ===== サイドバー ===== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="logo">
+      <div class="mark">🐙</div>
+      <div>
+        <span class="name">TRPG Central</span>
+        <span class="sub">使い方ガイド</span>
+      </div>
+    </div>
+    <input class="search" id="navFilter" type="search" placeholder="ページを検索…" aria-label="ページを検索" />
+
+    <div class="nav-group">
+      <div class="gtitle">はじめに</div>
+      <a class="nav-item" href="#home" data-page="home" data-kw="概要 ホーム はじめて 流れ クイックスタート"><span class="em">🏠</span>概要とはじめての流れ</a>
+    </div>
+    <div class="nav-group">
+      <div class="gtitle">基本機能</div>
+      <a class="nav-item" href="#characters" data-page="characters" data-kw="探索者 キャラクター シート 武器 charaeno インポート 立ち絵"><span class="em">📜</span>探索者管理</a>
+      <a class="nav-item" href="#dice" data-page="dice" data-kw="ダイス 判定 幸運 プッシュ 狂気表 演出"><span class="em">🎲</span>ダイスローラー</a>
+      <a class="nav-item" href="#sessions" data-page="sessions" data-kw="卓 セッション 戦闘 トラッカー タイマー ログ 応急手当 装弾 状態異常"><span class="em">🕯️</span>卓(セッション)管理</a>
+      <a class="nav-item" href="#scenarios" data-page="scenarios" data-kw="シナリオ NPC ハンドアウト 生成 ジェネレータ"><span class="em">📖</span>シナリオ管理</a>
+    </div>
+    <div class="nav-group">
+      <div class="gtitle">AI機能</div>
+      <a class="nav-item" href="#aigm" data-page="aigm" data-kw="AI GM キーパー クロード claude プレイ 音声 TTS"><span class="em">🐙</span>AI GMプレイ</a>
+      <a class="nav-item" href="#campaign" data-page="campaign" data-kw="キャンペーン 続編 あらすじ 継続 引き継ぎ"><span class="em">🏕️</span>キャンペーン継続</a>
+    </div>
+    <div class="nav-group">
+      <div class="gtitle">その他</div>
+      <a class="nav-item" href="#tools" data-page="tools" data-kw="統計 早見表 バックアップ PWA ココフォリア リプレイ 成長"><span class="em">🧰</span>便利機能</a>
+      <a class="nav-item" href="#faq" data-page="faq" data-kw="注意 制約 データ 仕組み APIキー 認証 画像"><span class="em">❓</span>注意点とデータの仕組み</a>
+    </div>
+  </aside>
+  <div class="overlay" id="overlay"></div>
+
+  <!-- ===== メイン ===== -->
+  <div class="main">
+    <div class="topbar">
+      <button id="menuBtn" aria-label="メニューを開く">☰</button>
+      <span class="t">TRPG Central 説明書</span>
+    </div>
+
+    <div class="content" id="content">
+
+      <!-- ============ ホーム ============ -->
+      <section class="page" data-page="home" data-title="概要とはじめての流れ">
+        <div class="hero">
+          <div class="crumb">USER MANUAL</div>
+          <h1>🐙 TRPG Central 説明書</h1>
+          <p class="lead" style="margin-bottom:0">
+            クトゥルフ神話TRPG(6版/7版)の管理サイト <strong>TRPG Central</strong> の使い方ガイドです。
+            人間だけで遊ぶ卓の管理から、<strong>Claude がキーパー(GM)を務める AI GM プレイ</strong>まで、このサイトひとつで完結します。
+          </p>
+          <div class="tags">
+            <span class="tag">CoC 6版 / 7版</span>
+            <span class="tag">AI GM(Claude)</span>
+            <span class="tag">戦闘トラッカー</span>
+            <span class="tag">キャンペーン継続</span>
+            <span class="tag">PWA対応</span>
+          </div>
+        </div>
+
+        <h2>はじめての流れ</h2>
+        <p>まず探索者を1人作り、遊び方に応じて「人間卓」か「AI GM」に進みます。</p>
+        <div class="flow">
+          <div class="step"><span class="n">1</span><strong>探索者を作成</strong><br>新規作成 or Charaenoインポート</div>
+          <div class="arrow">→</div>
+          <div class="step"><span class="n">2</span><strong>遊び方を選ぶ</strong><br>人間卓なら「卓管理」、ソロならAI GM</div>
+          <div class="arrow">→</div>
+          <div class="step"><span class="n">3</span><strong>セッション!</strong><br>判定・戦闘・SANチェック</div>
+          <div class="arrow">→</div>
+          <div class="step"><span class="n">4</span><strong>終了後</strong><br>成長チェック・あらすじ・続編</div>
+        </div>
+
+        <h2>各ページの案内</h2>
+        <div class="cards">
+          <a class="card" href="#characters"><span class="ci">📜</span><div class="ct">探索者管理</div><p class="cd">6版/7版シートの作成・武器・プレイ記録・インポート</p></a>
+          <a class="card" href="#dice"><span class="ci">🎲</span><div class="ct">ダイスローラー</div><p class="cd">技能判定・幸運消費・プッシュロール・狂気表</p></a>
+          <a class="card" href="#sessions"><span class="ci">🕯️</span><div class="ct">卓管理</div><p class="cd">戦闘トラッカー・セッションタイマー・卓ログ</p></a>
+          <a class="card" href="#scenarios"><span class="ci">📖</span><div class="ct">シナリオ管理</div><p class="cd">AI生成・NPCジェネレータ・ハンドアウト</p></a>
+          <a class="card" href="#aigm"><span class="ci">🐙</span><div class="ct">AI GMプレイ</div><p class="cd">Claudeがキーパー。最大4人パーティ対応</p></a>
+          <a class="card" href="#campaign"><span class="ci">🏕️</span><div class="ct">キャンペーン継続</div><p class="cd">続編作成・あらすじ自動生成・状態引き継ぎ</p></a>
+          <a class="card" href="#tools"><span class="ci">🧰</span><div class="ct">便利機能</div><p class="cd">統計・早見表・バックアップ・PWA</p></a>
+          <a class="card" href="#faq"><span class="ci">❓</span><div class="ct">注意点</div><p class="cd">APIキー・認証・データの仕組み</p></a>
+        </div>
+
+        <div class="tip">
+          サイドバー(モバイルは左上の ☰)からいつでもページを切り替えられます。
+          キーボードの <kbd>←</kbd> <kbd>→</kbd> でも前後のページへ移動できます。
+        </div>
+      </section>
+
+      <!-- ============ 探索者 ============ -->
+      <section class="page" data-page="characters" data-title="探索者管理">
+        <div class="crumb">基本機能</div>
+        <h1>📜 探索者管理</h1>
+        <p class="lead">メニュー「探索者」。CoC 6版/7版の探索者シートを作成・管理します。</p>
+
+        <h2>新規作成</h2>
+        <div class="flow">
+          <div class="step"><span class="n">1</span>版(6版/7版)を選ぶ</div>
+          <div class="arrow">→</div>
+          <div class="step"><span class="n">2</span>能力値を入力 or <strong>ダイスで自動ロール</strong></div>
+          <div class="arrow">→</div>
+          <div class="step"><span class="n">3</span>技能ポイントを割り振り</div>
+          <div class="arrow">→</div>
+          <div class="step"><span class="n">4</span>保存</div>
+        </div>
+        <ul>
+          <li>HP・MP・SAN・DB(ダメージボーナス)などの派生値は<strong>自動計算</strong>されます</li>
+          <li>職業技能・趣味技能のポイント上限も版のルールに沿って自動管理</li>
+          <li>リストにない技能は<strong>カスタム技能</strong>として追加できます</li>
+        </ul>
+
+        <h2>Charaenoからインポート</h2>
+        <p>
+          7版のキャラクターシート作成サイト <strong>Charaeno</strong> のJSONを取り込めます。
+          探索者一覧の「⬇ インポート」からJSONファイルを選ぶだけです。
+        </p>
+        <div class="warn">武器と立ち絵はインポート対象外です。取り込み後にシートで追加してください。</div>
+
+        <h2>シート詳細でできること</h2>
+        <div class="cards">
+          <div class="card"><span class="ci">⚔️</span><div class="ct">武器管理</div><p class="cd">武器を登録するとワンタップで命中判定+DB込みダメージロール</p></div>
+          <div class="card"><span class="ci">🖼️</span><div class="ct">立ち絵</div><p class="cd">画像をアップロードしてシートやAI GM画面に表示</p></div>
+          <div class="card"><span class="ci">📜</span><div class="ct">プレイ記録</div><p class="cd">参加した卓・通算成績・SAN推移を自動集計</p></div>
+          <div class="card"><span class="ci">🎭</span><div class="ct">ココフォリア出力</div><p class="cd">チャットパレット付きの駒データをクリップボードへ</p></div>
+          <div class="card"><span class="ci">🧬</span><div class="ct">複製</div><p class="cd">シートをコピーして別バージョンを作成</p></div>
+        </div>
+
+        <div class="pager"></div>
+      </section>
+
+      <!-- ============ ダイス ============ -->
+      <section class="page" data-page="dice" data-title="ダイスローラー">
+        <div class="crumb">基本機能</div>
+        <h1>🎲 ダイスローラー</h1>
+        <p class="lead">メニュー「ダイス」。汎用ロールから7版の拡張ルールまで、すべてのダイスをここで振れます。</p>
+
+        <h2>基本のロール</h2>
+        <ul>
+          <li><strong>プリセット</strong>: 1d100 / 1d10 / 1d6 / 2d6 / 3d6 / 1d4 をワンタップ</li>
+          <li><strong>複合式</strong>: <code>1d6+1d4+2</code> のような式も入力できます</li>
+          <li><strong>技能判定</strong>: 目標値を入れて判定。6版はクリティカル/ファンブル、7版は成功度(イクストリーム/ハード)を自動判別</li>
+        </ul>
+
+        <h2>探索者を選んでワンタップ判定</h2>
+        <p>
+          探索者を選択すると、その探索者の技能が実効値付きのボタンで並びます。
+          SANチェック・アイデア・幸運・知識などの特殊判定もワンタップです。
+        </p>
+
+        <h2>7版の拡張ルール <span class="badge v7">7版</span></h2>
+        <h3>🍀 幸運消費</h3>
+        <p>
+          判定に<strong>失敗</strong>したとき、「幸運で成功にする」ボタンが表示されます。
+          不足分のポイント(出目 − 目標値)を幸運から消費して、判定を成功に変えられます。
+          残り幸運はシートに反映され、消費済みの判定にはもう使えません。
+        </p>
+        <h3>🎲 プッシュロール</h3>
+        <p>
+          失敗した判定に<strong>もう一度だけ</strong>挑戦できます。プッシュ済みの判定は再プッシュできません。
+          失敗したときの「より重い代償」はキーパー(あなた)の裁量で。
+        </p>
+        <h3>ボーナス/ペナルティダイス</h3>
+        <p>判定時に指定すると、10の位のダイスを複数振って有利/不利な方を採用します。</p>
+
+        <h2>🌀 狂気表</h2>
+        <p>6版は「一時的狂気」、7版は「狂気の発作(リアルタイム)」を1d10で引けます。結果は履歴にも残ります。</p>
+
+        <h2>ダイス演出 <span class="badge new">NEW</span></h2>
+        <p>
+          出目は一瞬シャッフルしてから確定します。<strong>クリティカル/イクストリーム成功はリング</strong>が輝き、
+          <strong>ファンブルは画面がシェイク</strong>します。
+          OSで「視差効果を減らす」を設定している場合は自動で無効になります。
+        </p>
+
+        <div class="pager"></div>
+      </section>
+
+      <!-- ============ 卓管理 ============ -->
+      <section class="page" data-page="sessions" data-title="卓(セッション)管理">
+        <div class="crumb">基本機能</div>
+        <h1>🕯️ 卓(セッション)管理</h1>
+        <p class="lead">メニュー「卓管理」。人間同士で遊ぶセッションの管理ハブです。日程・参加者・シナリオを紐付け、当日はここが司令塔になります。</p>
+
+        <h2>卓のライフサイクル</h2>
+        <div class="flow">
+          <div class="step">🪧 <strong>募集中</strong><br>日程・シナリオ・参加探索者を設定</div>
+          <div class="arrow">→</div>
+          <div class="step">▶️ <strong>進行中</strong><br>戦闘・ログ・タイマーを活用</div>
+          <div class="arrow">→</div>
+          <div class="step">🏁 <strong>終了</strong><br>あらすじ生成・記録</div>
+        </div>
+
+        <h2>⏱️ セッションタイマー <span class="badge new">NEW</span></h2>
+        <ul>
+          <li>卓の<strong>経過時間</strong>を表示。開始/一時停止/リセット</li>
+          <li><strong>休憩カウントダウン</strong>: 10分/30分/60分のプリセット。時間になると「休憩終了!」表示</li>
+          <li>開始時刻はブラウザに保存されるため、<strong>リロードしても継続</strong>します</li>
+        </ul>
+
+        <h2>⚔️ 戦闘トラッカー</h2>
+        <p>DEX順のイニシアチブ管理・HP増減・ラウンド送りに加え、武器攻撃に対応しています。</p>
+        <div class="flow">
+          <div class="step"><span class="n">1</span>参加者を追加<br>(PC=シートから / NPC=手動)</div>
+          <div class="arrow">→</div>
+          <div class="step"><span class="n">2</span>DEX順で手番を進行</div>
+          <div class="arrow">→</div>
+          <div class="step"><span class="n">3</span>⚔️ 攻撃 → 武器と対象を選ぶ</div>
+          <div class="arrow">→</div>
+          <div class="step"><span class="n">4</span>命中判定→ダメージが<br>対象HPに自動反映</div>
+        </div>
+        <h3>状態異常チップ <span class="badge new">NEW</span></h3>
+        <p>「+状態」から <strong>発狂・重傷・拘束・転倒・毒・隠密</strong> などを付与(自由入力も可)。チップをクリックすると解除されます。</p>
+        <h3>🩹 応急手当 <span class="badge new">NEW</span></h3>
+        <p>ワンタップで1d3をロールしてHPを回復します。ロールは卓ログに記録されます。</p>
+        <h3>装弾数管理 <span class="badge new">NEW</span></h3>
+        <p>射撃武器は攻撃のたびに残弾が減り、弾切れになると「リロード」するまで撃てません。NPC武器の追加時に装弾数を指定できます。</p>
+
+        <h2>📜 卓ログ</h2>
+        <p>
+          ダイス履歴と、GMが手入力した出来事メモを<strong>時系列でまとめて表示</strong>します。戦闘の攻撃ロールもここに記録されます。
+          <strong>📝 あらすじ生成</strong> <span class="badge api">要APIキー</span> ボタンで、卓ログとダイス履歴からセッションのあらすじをAIに要約させて記録できます。
+        </p>
+
+        <h2>🐙 AI KP補佐 <span class="badge api">要APIキー</span></h2>
+        <p>
+          人間がキーパーを務める卓の相談相手です。NPCのセリフ案・情景描写・ルール裁定などをチャットで相談できます(進行そのものはしません)。
+        </p>
+
+        <div class="pager"></div>
+      </section>
+
+      <!-- ============ シナリオ ============ -->
+      <section class="page" data-page="scenarios" data-title="シナリオ管理">
+        <div class="crumb">基本機能</div>
+        <h1>📖 シナリオ管理</h1>
+        <p class="lead">メニュー「シナリオ」。自作・既製シナリオの保存庫です。AI GMプレイのネタ元にもなります。</p>
+
+        <h2>基本機能</h2>
+        <ul>
+          <li>シナリオ本文の保存・検索・<strong>タグ管理</strong></li>
+          <li>卓(セッション)やAI GMセッションに紐付けて利用</li>
+        </ul>
+
+        <h2>AIシナリオ自動生成 <span class="badge api">要APIキー</span></h2>
+        <p>テーマ・舞台・ホラー度を指定すると、Claudeが導入・真相・NPC・手がかり・SANチェック・結末分岐を含むシナリオを生成します。生成後は自由に編集できます。</p>
+
+        <h2>NPC・ハンドアウト資料</h2>
+        <ul>
+          <li>シナリオに<strong>NPC資料</strong>と<strong>ハンドアウト</strong>を添付できます(画像付き可)</li>
+          <li>NPC資料は<strong>AI GMセッション作成時に自動でキーパーに連携</strong>され、AIがそのNPCを演じます</li>
+        </ul>
+
+        <h2>🤖 AI NPCジェネレータ <span class="badge api">要APIキー</span> <span class="badge new">NEW</span></h2>
+        <div class="flow">
+          <div class="step"><span class="n">1</span>役どころを入力<br>「怪しい骨董屋の主人」など</div>
+          <div class="arrow">→</div>
+          <div class="step"><span class="n">2</span>「生成」を押す</div>
+          <div class="arrow">→</div>
+          <div class="step"><span class="n">3</span>NPC資料として自動保存</div>
+        </div>
+        <p>生成されるNPCには <strong>名前・立場・外見・口調(セリフ例付き)・知っていること・秘密・簡易ステータス</strong> が含まれます。シナリオ本文の内容も加味されます。</p>
+
+        <div class="pager"></div>
+      </section>
+
+      <!-- ============ AI GM ============ -->
+      <section class="page" data-page="aigm" data-title="AI GMプレイ">
+        <div class="crumb">AI機能</div>
+        <h1>🐙 AI GMプレイ <span class="badge api">要APIキー</span></h1>
+        <p class="lead">メニュー「AI GM」。Claudeがキーパーとしてシナリオを進行します。ソロプレイでも、最大4人のパーティでも。</p>
+
+        <h2>仕組み — ダイスはすべてサーバーが振る</h2>
+        <p>
+          判定・SANチェック・狂気表・幸運消費は<strong>すべてサーバー側で実際にダイスを振ります</strong>(tool use)。
+          AIが出目を勝手に決めることはありません。
+        </p>
+        <div class="flow">
+          <div class="step"><span class="n">1</span>あなたが行動を宣言</div>
+          <div class="arrow">→</div>
+          <div class="step"><span class="n">2</span>Claudeが判定を要求</div>
+          <div class="arrow">→</div>
+          <div class="step"><span class="n">3</span>サーバーがダイスを振り記録</div>
+          <div class="arrow">→</div>
+          <div class="step"><span class="n">4</span>結果を受けて物語が進む</div>
+        </div>
+
+        <h2>セッションの作り方</h2>
+        <ul>
+          <li>探索者を<strong>1〜4人</strong>選択(全員のHP/MP/SANを個別管理、7版は幸運も)</li>
+          <li>シナリオはライブラリから選ぶ・その場で書く・AIに生成させるの3通り</li>
+          <li>6版/7版どちらのルールにも対応(版はメンバーの探索者に合わせます)</li>
+        </ul>
+
+        <h2>プレイ中の機能</h2>
+        <div class="tablewrap"><table>
+          <tr><th>機能</th><th>説明</th></tr>
+          <tr><td>💾 保存・再開</td><td>会話はすべて保存され、いつでも中断・再開できます</td></tr>
+          <tr><td>🔊 音声読み上げ</td><td>キーパーの語りをブラウザ音声で読み上げ(ソロプレイの没入感UP)</td></tr>
+          <tr><td>🍀 幸運(7版)</td><td>メンバーごとに幸運バーを表示。幸運消費を宣言するとキーパーが減算して成功化</td></tr>
+          <tr><td>🌀 狂気表</td><td>SAN喪失が大きいとキーパーが狂気表を振り、症状を演出に反映</td></tr>
+          <tr><td>📊 統計</td><td>SAN推移グラフ・出目分布・技能別成績を表示</td></tr>
+        </table></div>
+
+        <h2>終了後の流れ</h2>
+        <div class="cards">
+          <div class="card"><span class="ci">📈</span><div class="ct">成長チェック</div><p class="cd">経験した技能で1d100 &gt; 現在値なら+1d10。結果とHP/MP/SAN(/幸運)をシートに反映</p></div>
+          <div class="card"><span class="ci">📄</span><div class="ct">リプレイDL</div><p class="cd">セッションログを読み物風Markdownでダウンロード</p></div>
+          <div class="card"><span class="ci">📊</span><div class="ct">統計を確認</div><p class="cd">SAN推移・出目分布・クリファン率</p></div>
+          <div class="card"><span class="ci">▶</span><div class="ct">続編を作る</div><p class="cd">キャンペーンとして次の話へ →「キャンペーン継続」参照</p></div>
+        </div>
+
+        <div class="tip">
+          AIプレイ中のHP/MP/SANは<strong>セッション専用のスナップショット</strong>で管理され、マスターのシートを直接書き換えません。
+          反映したいときだけ成長チェックから明示的に反映します。
+        </div>
+
+        <div class="pager"></div>
+      </section>
+
+      <!-- ============ キャンペーン ============ -->
+      <section class="page" data-page="campaign" data-title="キャンペーン継続">
+        <div class="crumb">AI機能</div>
+        <h1>🏕️ キャンペーン継続 <span class="badge new">NEW</span></h1>
+        <p class="lead">終了したAI GMセッションから「▶ 続編を作る」。同じ探索者で第2話・第3話と物語をつなげられます。</p>
+
+        <h2>続編を作る手順</h2>
+        <div class="flow">
+          <div class="step"><span class="n">1</span>終了したセッションを開き<br><strong>「▶ 続編を作る」</strong></div>
+          <div class="arrow">→</div>
+          <div class="step"><span class="n">2</span>📝 あらすじをAIで自動生成<br>(手書き・編集もOK)</div>
+          <div class="arrow">→</div>
+          <div class="step"><span class="n">3</span>タイトル・シナリオを調整</div>
+          <div class="arrow">→</div>
+          <div class="step"><span class="n">4</span>作成 → 第2話スタート!</div>
+        </div>
+
+        <h2>引き継がれるもの</h2>
+        <div class="tablewrap"><table>
+          <tr><th>項目</th><th>内容</th></tr>
+          <tr><td>探索者の状態</td><td>HP/MP/SAN(7版は幸運も)を<strong>前回の最終状態から開始</strong>。削られたSANはそのまま</td></tr>
+          <tr><td>あらすじ</td><td>新しいシナリオの末尾に「## 前回のあらすじ」として自動挿入。キーパーが前回の出来事を踏まえて進行します</td></tr>
+          <tr><td>メンバー</td><td>前回と同じ探索者で自動作成</td></tr>
+          <tr><td>つながり</td><td>一覧に<strong>「続編」バッジ</strong>が付き、どのセッションの続きか分かります</td></tr>
+        </table></div>
+
+        <h2>あらすじの自動生成 <span class="badge api">要APIキー</span></h2>
+        <p>
+          前回セッションの会話ログ・判定・SANチェックから、キーパー用のあらすじ(300〜600字+探索者の状態)をAIが要約します。
+          生成結果は<strong>必ず編集できます</strong>。AIを使わず自分で書いても構いません(その場合APIキー不要)。
+        </p>
+
+        <div class="tip">続きの続き(第3話、第4話…)も同じ手順で連鎖できます。人間卓でも卓ログの「📝 あらすじ生成」で同様の要約が作れます。</div>
+
+        <div class="pager"></div>
+      </section>
+
+      <!-- ============ 便利機能 ============ -->
+      <section class="page" data-page="tools" data-title="便利機能">
+        <div class="crumb">その他</div>
+        <h1>🧰 便利機能</h1>
+        <p class="lead">プレイを支える周辺機能たちです。</p>
+
+        <h2>📊 プレイ統計</h2>
+        <p>セッションごとに <strong>SAN推移グラフ・d100出目分布・成功率/クリファン率・技能別成績</strong> を表示します。探索者シートの「プレイ記録」では通算成績も見られます。</p>
+
+        <h2>📚 ルール早見表</h2>
+        <p>メニュー「早見表」。6版/7版の判定・SAN・戦闘・成長ルールの要点をカード形式で参照できます。プレイ中のルール確認に。</p>
+
+        <h2>💾 バックアップ</h2>
+        <ul>
+          <li><strong>ダウンロード</strong>: 探索者・シナリオ・プレイログを含む全データをJSONで書き出し</li>
+          <li><strong>復元(インポート)</strong>: バックアップJSONから全データを復元(現在のデータは置き換えられます)</li>
+        </ul>
+        <div class="warn">立ち絵などの画像ファイルはバックアップJSONに含まれません。別途 <code>public/uploads/</code> を退避してください。</div>
+
+        <h2>📱 PWA(ホーム画面に追加)</h2>
+        <p>
+          ブラウザの「ホーム画面に追加/インストール」から、アプリのように起動できます。
+          一度開いたページはオフラインでも閲覧できます(新しいデータの読み込み・保存には接続が必要です)。
+        </p>
+
+        <h2>🎭 ココフォリア連携</h2>
+        <p>探索者シートから、チャットパレット付きの駒データをクリップボードにコピーして、ココフォリアに貼り付けられます。</p>
+
+        <h2>📄 リプレイ書き出し</h2>
+        <p>AI GMセッションのログを、読み物風のMarkdownとしてダウンロードできます。</p>
+
+        <div class="pager"></div>
+      </section>
+
+      <!-- ============ FAQ ============ -->
+      <section class="page" data-page="faq" data-title="注意点とデータの仕組み">
+        <div class="crumb">その他</div>
+        <h1>❓ 注意点とデータの仕組み</h1>
+        <p class="lead">つまずきやすいポイントと、データがどう繋がっているかのまとめです。</p>
+
+        <h2>注意点</h2>
+        <div class="tablewrap"><table>
+          <tr><th>項目</th><th>内容</th></tr>
+          <tr><td>AI機能</td><td>AI GM・KP補佐・シナリオ/NPC生成・あらすじ生成には <code>ANTHROPIC_API_KEY</code> の設定が必要です。<strong>未設定でもそれ以外の全機能は動作します</strong></td></tr>
+          <tr><td>ログイン認証</td><td><code>APP_PASSWORD</code> を設定すると有効になります(単一ユーザー向け)。<strong>インターネットに公開する場合は必ず設定</strong>してください。ローカルでは未設定でOK</td></tr>
+          <tr><td>画像</td><td>立ち絵などは <code>public/uploads/</code> に保存され、バックアップJSONには含まれません</td></tr>
+          <tr><td>Charaeno</td><td>7版のシートJSONが対象。武器・立ち絵は取り込まれません</td></tr>
+          <tr><td>オフライン</td><td>PWAで閲覧できるのは初回に開いたことのあるページのみ。保存には接続が必要です</td></tr>
+        </table></div>
+
+        <h2>データの仕組み</h2>
+        <ul>
+          <li><strong>探索者(Character)</strong>は、人間卓にもAI GM卓にも参加できます</li>
+          <li><strong>ダイスロール(DiceRoll)</strong>は卓またはAI GMセッションに紐づき、卓ログ・統計の元データになります</li>
+          <li>AIプレイ中のHP/MP/SANは<strong>セッション専用のスナップショット</strong>。マスターのシートには成長チェックで明示的に反映するまで影響しません</li>
+          <li>続編セッションは <strong>前のセッションへの参照</strong> を持ち、1本の鎖としてつながります</li>
+        </ul>
+
+        <h2>セットアップ・公開について</h2>
+        <p>
+          インストール手順は同梱の <code>README.md</code>、クラウド公開(Firebase)の手順は <code>DEPLOY.md</code> を参照してください。
+        </p>
+
+        <div class="pager"></div>
+      </section>
+
+    </div>
+
+    <footer class="doc">TRPG Central — クトゥルフ神話TRPG(6版/7版)対応 管理サイト 説明書</footer>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var pages = Array.prototype.slice.call(document.querySelectorAll(".page"));
+  var navItems = Array.prototype.slice.call(document.querySelectorAll(".nav-item"));
+  var order = pages.map(function (p) { return p.dataset.page; });
+  var sidebar = document.getElementById("sidebar");
+  var overlay = document.getElementById("overlay");
+
+  function titleOf(id) {
+    var pg = document.querySelector('.page[data-page="' + id + '"]');
+    return pg ? pg.dataset.title : id;
+  }
+
+  // 前後ナビを各ページに生成
+  pages.forEach(function (pg, i) {
+    var pager = pg.querySelector(".pager");
+    if (!pager) return;
+    var html = "";
+    if (i > 0) {
+      html += '<a href="#' + order[i - 1] + '"><span class="dir">← 前のページ</span><span class="pt">' + titleOf(order[i - 1]) + "</span></a>";
+    } else {
+      html += '<span class="spacer"></span>';
+    }
+    if (i < order.length - 1) {
+      html += '<a class="next" href="#' + order[i + 1] + '"><span class="dir">次のページ →</span><span class="pt">' + titleOf(order[i + 1]) + "</span></a>";
+    } else {
+      html += '<span class="spacer"></span>';
+    }
+    pager.innerHTML = html;
+  });
+
+  function show(id) {
+    if (order.indexOf(id) === -1) id = "home";
+    pages.forEach(function (pg) {
+      var on = pg.dataset.page === id;
+      pg.classList.toggle("show", on);
+    });
+    navItems.forEach(function (a) {
+      a.classList.toggle("active", a.dataset.page === id);
+    });
+    document.title = titleOf(id) + " | TRPG Central 説明書";
+    window.scrollTo(0, 0);
+    closeMenu();
+  }
+
+  function current() {
+    var h = location.hash.replace("#", "");
+    return order.indexOf(h) !== -1 ? h : "home";
+  }
+
+  window.addEventListener("hashchange", function () { show(current()); });
+  show(current());
+
+  // キーボード ←→ でページ移動 (入力中は無効)
+  document.addEventListener("keydown", function (e) {
+    var tag = (e.target.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea") return;
+    var i = order.indexOf(current());
+    if (e.key === "ArrowRight" && i < order.length - 1) location.hash = order[i + 1];
+    if (e.key === "ArrowLeft" && i > 0) location.hash = order[i - 1];
+  });
+
+  // ナビ検索フィルタ
+  document.getElementById("navFilter").addEventListener("input", function (e) {
+    var q = e.target.value.trim().toLowerCase();
+    navItems.forEach(function (a) {
+      var hay = (a.textContent + " " + (a.dataset.kw || "")).toLowerCase();
+      a.classList.toggle("hidden", q !== "" && hay.indexOf(q) === -1);
+    });
+  });
+
+  // モバイルメニュー
+  function closeMenu() {
+    sidebar.classList.remove("open");
+    overlay.classList.remove("open");
+  }
+  document.getElementById("menuBtn").addEventListener("click", function () {
+    sidebar.classList.toggle("open");
+    overlay.classList.toggle("open");
+  });
+  overlay.addEventListener("click", closeMenu);
+})();
+</script>
+</body>
+</html>
