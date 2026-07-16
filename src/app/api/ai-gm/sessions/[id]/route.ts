@@ -25,6 +25,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
     scenario: session.scenario,
     status: session.status,
     growthApplied: Boolean(session.growthAppliedAt),
+    previousSessionId: session.previousSessionId,
+    summary: session.summary,
     members: session.members.map((m) => ({
       characterId: m.characterId,
       name: m.character.name,

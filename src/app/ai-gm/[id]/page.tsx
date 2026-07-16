@@ -4,6 +4,7 @@ import { use, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { OutcomeBadge } from "@/components/dice/OutcomeBadge";
 import { GrowthCheckModal } from "@/components/ai-gm/GrowthCheckModal";
+import { SequelDialog } from "@/components/ai-gm/SequelDialog";
 import { SessionStats } from "@/components/ai-gm/SessionStats";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
@@ -34,8 +35,11 @@ interface SessionMember {
 interface SessionDetail {
   id: string;
   title: string;
+  scenario: string;
   status: string;
   growthApplied: boolean;
+  previousSessionId: string | null;
+  summary: string | null;
   members: SessionMember[];
   messages: DisplayMessage[];
   apiKeyConfigured: boolean;
@@ -158,6 +162,7 @@ export default function AiGmPlayPage({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [showGrowthModal, setShowGrowthModal] = useState(false);
+  const [showSequelDialog, setShowSequelDialog] = useState(false);
   // セッション終了の確認ダイアログ
   const [confirmFinish, setConfirmFinish] = useState(false);
   const [showStats, setShowStats] = useState(false);
@@ -422,6 +427,12 @@ export default function AiGmPlayPage({
                 >
                   📈 成長チェック
                 </button>
+                <button
+                  onClick={() => setShowSequelDialog(true)}
+                  className="rounded bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-emerald-50 hover:bg-emerald-600"
+                >
+                  ▶ 続編を作る
+                </button>
                 <span className="rounded border border-zinc-600 bg-zinc-800 px-3 py-1 text-xs text-zinc-400">
                   終了済み
                 </span>
@@ -631,6 +642,16 @@ export default function AiGmPlayPage({
           onApplied={() => load()}
         />
       )}
+
+      <SequelDialog
+        open={showSequelDialog}
+        onClose={() => setShowSequelDialog(false)}
+        sessionId={session.id}
+        sessionTitle={session.title}
+        scenario={session.scenario}
+        characterIds={session.members.map((m) => m.characterId)}
+        cachedSummary={session.summary}
+      />
     </div>
   );
 }

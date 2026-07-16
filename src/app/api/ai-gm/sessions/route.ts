@@ -15,6 +15,10 @@ const createSchema = z.object({
     .max(4, "探索者は最大4人までです")
     .refine((ids) => new Set(ids).size === ids.length, "探索者が重複しています"),
   scenarioId: z.string().optional().nullable(),
+  // キャンペーン続編: 前セッションIDを指定するとメンバー最終状態(HP/MP/SAN/幸運)を引き継ぐ。
+  // summaryText はユーザーが編集した「前回のあらすじ」(APIキー無しでも手書きで続編可)
+  previousSessionId: z.string().optional().nullable(),
+  summaryText: z.string().max(5000).optional().nullable(),
 });
 
 function initialState(character: Character): AiGmState {
@@ -114,6 +118,29 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // キャンペーン続編: 前セッションのメンバー最終状態を引き継ぐ
+  let previousSessionId: string | null = null;
+  const carriedStates = new Map<string, string>(); // characterId → stateJson
+  if (parsed.data.previousSessionId) {
+    const prev = await prisma.aiGmSession.findUnique({
+      where: { id: parsed.data.previousSessionId },
+      include: { members: true },
+    });
+    if (!prev) {
+      return NextResponse.json(
+        { error: "続編元のセッションが見つかりません" },
+        { status: 404 },
+      );
+    }
+    previousSessionId = prev.id;
+    for (const m of prev.members) carriedStates.set(m.characterId, m.stateJson);
+  }
+  // あらすじをシナリオ末尾へ連結 (キーパーが前回の展開を把握できる)
+  const summaryText = parsed.data.summaryText?.trim();
+  if (summaryText) {
+    scenarioText += `\n\n## 前回のあらすじ\n${summaryText}`;
+  }
+
   // 選択順を保持してポジションを振る
   const ordered = parsed.data.characterIds.map(
     (id) => characters.find((c) => c.id === id)!,
@@ -123,10 +150,14 @@ export async function POST(req: NextRequest) {
       title: parsed.data.title,
       scenario: scenarioText,
       scenarioId,
+      previousSessionId,
       members: {
         create: ordered.map((character, position) => ({
           characterId: character.id,
-          stateJson: JSON.stringify(initialState(character)),
+          // 続編で前セッションにも居た探索者は最終状態を継続、新規参加は初期状態
+          stateJson:
+            carriedStates.get(character.id) ??
+            JSON.stringify(initialState(character)),
           position,
         })),
       },

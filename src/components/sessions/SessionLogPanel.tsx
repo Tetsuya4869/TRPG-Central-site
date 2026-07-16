@@ -47,6 +47,7 @@ export function SessionLogPanel({ sessionId }: { sessionId: string }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [summarizing, setSummarizing] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -93,6 +94,28 @@ export function SessionLogPanel({ sessionId }: { sessionId: string }) {
     }
   }
 
+  // 卓ログからAIで「これまでのあらすじ」を生成し、SUMMARYログとして残す
+  async function generateSummary() {
+    if (summarizing) return;
+    setSummarizing(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/summary`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "あらすじの生成に失敗しました");
+        return;
+      }
+      setLogs((prev) => [...prev, data.log]);
+    } catch {
+      setError("通信エラーが発生しました");
+    } finally {
+      setSummarizing(false);
+    }
+  }
+
   async function deleteLog(logId: string) {
     setDeleteTarget(null);
     try {
@@ -114,7 +137,17 @@ export function SessionLogPanel({ sessionId }: { sessionId: string }) {
 
   return (
     <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5 space-y-4">
-      <h2 className="font-semibold text-zinc-300">📜 卓ログ</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold text-zinc-300">📜 卓ログ</h2>
+        <button
+          onClick={generateSummary}
+          disabled={summarizing || (rolls.length === 0 && logs.length === 0)}
+          title="卓ログからAIで「これまでのあらすじ」を生成します (要APIキー)"
+          className="rounded border border-zinc-700 px-3 py-1 text-xs text-zinc-400 hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-50"
+        >
+          {summarizing ? "生成中…" : "📝 あらすじ生成"}
+        </button>
+      </div>
 
       {/* 出来事メモ入力 */}
       <div className="flex gap-2">
@@ -174,9 +207,15 @@ export function SessionLogPanel({ sessionId }: { sessionId: string }) {
             ) : (
               <li
                 key={`l-${item.data.id}`}
-                className="flex items-start gap-2 rounded border border-emerald-900/50 bg-emerald-950/20 px-3 py-1.5 text-sm"
+                className={`flex items-start gap-2 rounded border px-3 py-1.5 text-sm ${
+                  item.data.kind === "SUMMARY"
+                    ? "border-purple-800/60 bg-purple-950/20"
+                    : "border-emerald-900/50 bg-emerald-950/20"
+                }`}
               >
-                <span className="shrink-0 text-xs text-zinc-600">📝</span>
+                <span className="shrink-0 text-xs text-zinc-600">
+                  {item.data.kind === "SUMMARY" ? "📖" : "📝"}
+                </span>
                 <span className="text-zinc-200 whitespace-pre-wrap flex-1">
                   {item.data.body}
                 </span>

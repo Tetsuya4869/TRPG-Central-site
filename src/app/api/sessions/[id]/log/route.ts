@@ -6,8 +6,8 @@ import { prisma } from "@/lib/prisma";
 type Params = { params: Promise<{ id: string }> };
 
 const logSchema = z.object({
-  kind: z.enum(["EVENT", "NOTE", "SCENE"]).default("EVENT"),
-  body: z.string().min(1, "内容を入力してください").max(2000),
+  kind: z.enum(["EVENT", "NOTE", "SCENE", "SUMMARY"]).default("EVENT"),
+  body: z.string().min(1, "内容を入力してください").max(5000),
 });
 
 export async function GET(_req: NextRequest, { params }: Params) {

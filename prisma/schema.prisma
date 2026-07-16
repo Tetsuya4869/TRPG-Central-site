@@ -152,13 +152,16 @@ model DiceRoll {
 // AI GMプレイセッション。stateJson はプレイ中のHP/MP/SANスナップショット
 // (マスターシートは直接更新しない)。status: "ONGOING" | "FINISHED"
 model AiGmSession {
-  id              String    @id @default(cuid())
-  title           String
-  scenario        String // プレイ開始時のスナップショット (ライブラリ編集の影響を受けない)
-  scenarioId      String? // 出所のライブラリシナリオ (任意)
-  scenarioRef     Scenario? @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
-  status          String    @default("ONGOING")
-  growthAppliedAt DateTime? // 成長チェック反映済みガード
+  id                String    @id @default(cuid())
+  title             String
+  scenario          String // プレイ開始時のスナップショット (ライブラリ編集の影響を受けない)
+  scenarioId        String? // 出所のライブラリシナリオ (任意)
+  scenarioRef       Scenario? @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
+  status            String    @default("ONGOING")
+  growthAppliedAt   DateTime? // 成長チェック反映済みガード
+  // キャンペーン継続: 直前セッションのID (FKは張らない=自己参照の複雑化回避、削除に耐える)
+  previousSessionId String?
+  summary           String? // AI生成したセッション要約のキャッシュ (続編のあらすじに使う)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 

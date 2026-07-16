@@ -17,6 +17,7 @@ interface AiGmSessionSummary {
   id: string;
   title: string;
   status: string;
+  previousSessionId: string | null;
   updatedAt: string;
   members: {
     id: string;
@@ -413,6 +414,11 @@ export default function AiGmPage() {
                   >
                     {s.status === "ONGOING" ? "進行中" : "終了"}
                   </span>
+                  {s.previousSessionId && (
+                    <span className="rounded border border-purple-500/50 bg-purple-500/20 px-2 py-0.5 text-xs font-semibold text-purple-300">
+                      続編
+                    </span>
+                  )}
                 </div>
                 <p className="text-sm text-zinc-500 mt-1 truncate">
                   探索者: {s.members.map((m) => m.character.name).join("、")}
