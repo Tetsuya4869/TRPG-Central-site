@@ -36,6 +36,16 @@ interface DiceRollRecord {
 
 const PRESETS = ["1d100", "1d10", "1d6", "2d6", "3d6", "1d4"];
 
+// 結果確定前に一瞬表示するシャッフル数字 (固定シーケンス、約80ms間隔)
+const SHUFFLE_SEQ = [7, 42, 88, 13, 66, 29, 54];
+
+// 出目の演出クラス: クリティカル系はリング、ファンブルはシェイク、通常はポップ
+function revealClass(outcome: string | null): string {
+  if (outcome === "CRITICAL" || outcome === "EXTREME") return "dice-crit";
+  if (outcome === "FUMBLE") return "dice-fumble";
+  return "dice-reveal";
+}
+
 export default function DicePage() {
   const [expression, setExpression] = useState("1d100");
   const [skillName, setSkillName] = useState("");
@@ -55,6 +65,30 @@ export default function DicePage() {
     description: string;
     duration: string;
   } | null>(null);
+  // シャッフル演出: null=確定表示、数値=SHUFFLE_SEQのインデックス
+  const [shuffleIdx, setShuffleIdx] = useState<number | null>(null);
+
+  // 新しいロール結果が来たら数字シャッフル→確定表示 (reduced-motion時はスキップ)
+  const latestId = latest?.id ?? null;
+  useEffect(() => {
+    if (latestId == null) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setShuffleIdx(null);
+      return;
+    }
+    let i = 0;
+    setShuffleIdx(0);
+    const timer = setInterval(() => {
+      i += 1;
+      if (i >= SHUFFLE_SEQ.length) {
+        clearInterval(timer);
+        setShuffleIdx(null);
+      } else {
+        setShuffleIdx(i);
+      }
+    }, 80);
+    return () => clearInterval(timer);
+  }, [latestId]);
 
   const fetchHistory = useCallback(async () => {
     const res = await fetch("/api/dice");
@@ -458,7 +492,18 @@ export default function DicePage() {
                 {latest.expression}
                 {latest.target != null && ` (目標値 ${latest.target})`}
               </p>
-              <p className="text-4xl font-bold text-emerald-300">{latest.total}</p>
+              {shuffleIdx != null ? (
+                <p className="text-4xl font-bold text-emerald-300 dice-shuffling font-mono tabular-nums">
+                  {SHUFFLE_SEQ[shuffleIdx]}
+                </p>
+              ) : (
+                <p
+                  key={latest.id}
+                  className={`inline-block px-3 text-4xl font-bold text-emerald-300 ${revealClass(latest.outcome)}`}
+                >
+                  {latest.total}
+                </p>
+              )}
               <p className="text-xs text-zinc-500">
                 出目:{" "}
                 {(() => {
@@ -471,9 +516,10 @@ export default function DicePage() {
                   }
                 })()}
               </p>
-              <OutcomeBadge outcome={latest.outcome} />
+              {shuffleIdx == null && <OutcomeBadge outcome={latest.outcome} />}
               {/* 7版: 失敗した判定への幸運消費 / プッシュロール */}
-              {latest.outcome === "FAILURE" &&
+              {shuffleIdx == null &&
+                latest.outcome === "FAILURE" &&
                 latest.target != null &&
                 characterChecks?.edition === "7" && (
                   <div className="flex flex-wrap justify-center gap-2 pt-1">

@@ -90,6 +90,7 @@ export function CombatTracker({
     hit: boolean;
     damage: number | null;
     damageExpr: string;
+    seq: number; // 演出リプレイ用の連番 (同じ結果でもアニメーションを再生する)
   } | null>(null);
   // NPC武器追加フォーム
   const [nwName, setNwName] = useState("");
@@ -413,7 +414,7 @@ export function CombatTracker({
         changeHp(targetId, -dmgTotal);
       }
 
-      setAttackResult({
+      setAttackResult((prev) => ({
         attacker: attacker.name,
         target: target.name,
         weapon: weapon.name,
@@ -422,7 +423,8 @@ export function CombatTracker({
         hit: r.hit,
         damage: r.hit ? dmgTotal : null,
         damageExpr: r.damageExpression,
-      });
+        seq: (prev?.seq ?? 0) + 1,
+      }));
       setAttackFor(null);
       setPickWeapon(null);
     } catch {
@@ -530,7 +532,16 @@ export function CombatTracker({
 
       {/* 直近の攻撃結果 */}
       {attackResult && (
-        <div className="flex items-center gap-2 rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm">
+        <div
+          key={attackResult.seq}
+          className={`flex items-center gap-2 rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm ${
+            attackResult.outcome === "CRITICAL" || attackResult.outcome === "EXTREME"
+              ? "dice-crit"
+              : attackResult.outcome === "FUMBLE"
+                ? "dice-fumble"
+                : "dice-reveal"
+          }`}
+        >
           <span className="text-zinc-400">
             {attackResult.attacker} → {attackResult.target} ({attackResult.weapon})
           </span>

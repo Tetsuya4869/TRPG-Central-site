@@ -8,6 +8,7 @@ import { ScenarioAssetsPanel } from "@/components/scenarios/ScenarioAssetsPanel"
 import { KpAssistantPanel } from "@/components/sessions/KpAssistantPanel";
 import { CombatTracker, type CombatPc } from "@/components/sessions/CombatTracker";
 import { SessionLogPanel } from "@/components/sessions/SessionLogPanel";
+import { SessionTimer } from "@/components/sessions/SessionTimer";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 interface CharacterSummary {
@@ -352,6 +353,9 @@ export default function SessionDetailPage({
           )}
         </section>
       </div>
+
+      {/* セッションタイマー */}
+      <SessionTimer sessionId={session.id} />
 
       {/* 戦闘トラッカー */}
       <CombatTracker
