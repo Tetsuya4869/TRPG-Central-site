@@ -79,10 +79,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 }
 
+// ソフトデリート: ゴミ箱へ移動する (プレイ履歴・卓参加は保たれ、/trashから復元できる)
 export async function DELETE(_req: NextRequest, { params }: Params) {
   const { id } = await params;
   try {
-    await prisma.character.delete({ where: { id } });
+    await prisma.character.update({ where: { id }, data: { deletedAt: new Date() } });
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "探索者が見つかりません" }, { status: 404 });

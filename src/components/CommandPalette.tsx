@@ -33,6 +33,7 @@ const PAGES: Item[] = [
   { key: "p-dice", icon: "🎲", label: "ダイスローラー", href: "/dice", group: "ページ" },
   { key: "p-aigm", icon: "🐙", label: "AI GMプレイ", href: "/ai-gm", group: "ページ" },
   { key: "p-ref", icon: "📚", label: "ルール早見表", href: "/reference", group: "ページ" },
+  { key: "p-trash", icon: "🗑️", label: "ゴミ箱", href: "/trash", group: "ページ" },
   { key: "p-manual", icon: "📘", label: "説明書", href: "/manual.html", group: "ページ" },
 ];
 

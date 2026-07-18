@@ -2,12 +2,14 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { deriveStats } from "@/lib/coc6/stats";
 import { CharacterImportButton } from "@/components/characters/CharacterImportButton";
+import { PinButton } from "@/components/PinButton";
 
 export const dynamic = "force-dynamic";
 
 export default async function CharactersPage() {
   const characters = await prisma.character.findMany({
-    orderBy: { updatedAt: "desc" },
+    where: { deletedAt: null },
+    orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }],
   });
 
   return (
@@ -67,7 +69,7 @@ export default async function CharactersPage() {
                       👤
                     </span>
                   )}
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <h2 className="font-semibold text-lg truncate">{c.name}</h2>
                     <p className="text-sm text-zinc-500 truncate">
                       {c.occupation ?? "職業不明"}
@@ -75,6 +77,7 @@ export default async function CharactersPage() {
                       {c.playerName && ` / PL: ${c.playerName}`}
                     </p>
                   </div>
+                  <PinButton type="characters" id={c.id} pinned={c.pinned} />
                 </div>
                 <div className="flex gap-4 text-xs text-zinc-400">
                   <span>

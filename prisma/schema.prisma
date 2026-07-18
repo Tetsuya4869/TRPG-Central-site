@@ -37,6 +37,8 @@ model Character {
   // Weapon[] 例 [{"name":"ナイフ","skillName":"ナイフ","damage":"1d4+DB"}] (weaponsSchemaで検証)
   weaponsJson String   @default("[]")
   memo       String?
+  pinned     Boolean   @default(false) // お気に入りピン留め (一覧の先頭に固定)
+  deletedAt  DateTime? // ゴミ箱 (非null=削除済み。一覧・検索から除外され、/trashから復元できる)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -96,6 +98,8 @@ model Scenario {
   summary   String?
   tags      String? // カンマ区切り (SQLiteは配列非対応)
   source    String   @default("MANUAL")
+  pinned    Boolean   @default(false) // お気に入りピン留め
+  deletedAt DateTime? // ゴミ箱 (非null=削除済み)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

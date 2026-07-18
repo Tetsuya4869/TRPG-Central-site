@@ -81,8 +81,16 @@ export default async function Home() {
           characters: { include: { character: { select: { name: true } } } },
         },
       }),
-      prisma.character.findMany({ orderBy: { updatedAt: "desc" }, take: 4 }),
-      prisma.scenario.findMany({ orderBy: { updatedAt: "desc" }, take: 4 }),
+      prisma.character.findMany({
+        where: { deletedAt: null },
+        orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }],
+        take: 4,
+      }),
+      prisma.scenario.findMany({
+        where: { deletedAt: null },
+        orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }],
+        take: 4,
+      }),
       prisma.gameSession.findMany({ orderBy: { updatedAt: "desc" }, take: 4 }),
     ]);
 
@@ -221,7 +229,15 @@ export default async function Home() {
               探索者・シナリオ・プレイログを含む全データをJSONで保存・復元。
             </p>
           </div>
-          <BackupControls />
+          <div className="space-y-2">
+            <BackupControls />
+            <Link
+              href="/trash"
+              className="inline-block text-xs text-zinc-500 hover:text-emerald-300"
+            >
+              🗑️ ゴミ箱 (削除したデータの復元)
+            </Link>
+          </div>
         </div>
       </section>
 

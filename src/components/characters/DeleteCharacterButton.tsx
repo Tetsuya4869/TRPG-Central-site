@@ -37,7 +37,7 @@ export function DeleteCharacterButton({ id, name }: { id: string; name: string }
       <ConfirmDialog
         open={confirming}
         title={`「${name}」を削除しますか?`}
-        message="この操作は取り消せません。"
+        message="ゴミ箱へ移動します。ダッシュボードのゴミ箱からいつでも復元できます。"
         confirmLabel="削除する"
         danger
         onConfirm={remove}

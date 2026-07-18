@@ -26,6 +26,8 @@ const character: Character = {
   skillsJson: "{}",
   weaponsJson: "[]",
   memo: null,
+  pinned: false,
+  deletedAt: null,
   createdAt: new Date(),
   updatedAt: new Date(),
 };

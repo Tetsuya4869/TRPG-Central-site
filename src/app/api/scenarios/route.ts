@@ -4,7 +4,8 @@ import { scenarioInputSchema } from "@/lib/coc6/types";
 
 export async function GET() {
   const scenarios = await prisma.scenario.findMany({
-    orderBy: { updatedAt: "desc" },
+    where: { deletedAt: null },
+    orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }],
   });
   return NextResponse.json(scenarios);
 }

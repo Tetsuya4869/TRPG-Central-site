@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
     );
   }
   const characters = await prisma.character.findMany({
-    where: { id: { in: parsed.data.characterIds } },
+    where: { id: { in: parsed.data.characterIds }, deletedAt: null },
   });
   if (characters.length !== parsed.data.characterIds.length) {
     return NextResponse.json({ error: "探索者が見つかりません" }, { status: 404 });

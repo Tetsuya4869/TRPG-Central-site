@@ -46,10 +46,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 }
 
+// ソフトデリート: ゴミ箱へ移動する (紐づく卓・AI GMセッションは保たれ、/trashから復元できる)
 export async function DELETE(_req: NextRequest, { params }: Params) {
   const { id } = await params;
   try {
-    await prisma.scenario.delete({ where: { id } });
+    await prisma.scenario.update({ where: { id }, data: { deletedAt: new Date() } });
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "シナリオが見つかりません" }, { status: 404 });

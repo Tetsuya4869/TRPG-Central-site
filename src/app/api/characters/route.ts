@@ -5,7 +5,8 @@ import { deriveStatsFor, initialLuckFor } from "@/lib/coc";
 
 export async function GET() {
   const characters = await prisma.character.findMany({
-    orderBy: { updatedAt: "desc" },
+    where: { deletedAt: null },
+    orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }],
   });
   return NextResponse.json(characters);
 }

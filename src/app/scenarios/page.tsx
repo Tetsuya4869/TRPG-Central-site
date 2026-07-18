@@ -10,6 +10,7 @@ interface ScenarioRecord {
   summary: string | null;
   tags: string | null;
   source: string;
+  pinned: boolean;
   updatedAt: string;
 }
 
@@ -65,6 +66,16 @@ export default function ScenariosPage() {
       return true;
     });
   }, [scenarios, query, sourceFilter, tagFilter]);
+
+  // ピン留めトグル (並び順はAPI側がピン優先で返すので再読込する)
+  async function togglePin(s: ScenarioRecord) {
+    const res = await fetch(`/api/scenarios/${s.id}/pin`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pinned: !s.pinned }),
+    });
+    if (res.ok) await load();
+  }
 
   async function remove() {
     if (!deleteTarget) return;
@@ -198,12 +209,25 @@ export default function ScenariosPage() {
                   <p className="text-sm text-zinc-500 mt-1">{s.summary}</p>
                 )}
               </Link>
-              <button
-                onClick={() => setDeleteTarget({ id: s.id, title: s.title })}
-                className="ml-4 text-xs text-zinc-600 hover:text-red-400"
-              >
-                削除
-              </button>
+              <div className="ml-4 flex items-center gap-3">
+                <button
+                  onClick={() => togglePin(s)}
+                  aria-label={s.pinned ? "ピン留めを外す" : "ピン留めする"}
+                  aria-pressed={s.pinned}
+                  title={s.pinned ? "ピン留めを外す" : "ピン留めして一覧の先頭に固定"}
+                  className={`text-base leading-none transition-transform hover:scale-125 ${
+                    s.pinned ? "" : "opacity-30 grayscale hover:opacity-70"
+                  }`}
+                >
+                  ⭐
+                </button>
+                <button
+                  onClick={() => setDeleteTarget({ id: s.id, title: s.title })}
+                  className="text-xs text-zinc-600 hover:text-red-400"
+                >
+                  削除
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -212,7 +236,7 @@ export default function ScenariosPage() {
       <ConfirmDialog
         open={deleteTarget !== null}
         title={`「${deleteTarget?.title ?? ""}」を削除しますか?`}
-        message="使用中のセッションには影響しません。"
+        message="ゴミ箱へ移動します (使用中のセッションには影響しません)。ダッシュボードのゴミ箱からいつでも復元できます。"
         confirmLabel="削除する"
         danger
         onConfirm={remove}

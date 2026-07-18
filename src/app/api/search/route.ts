@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
   const [characters, sessions, scenarios, aiGmSessions] = await Promise.all([
     prisma.character.findMany({
       where: {
+        deletedAt: null,
         OR: [{ name: contains }, { occupation: contains }, { playerName: contains }],
       },
       orderBy: { updatedAt: "desc" },
@@ -31,6 +32,7 @@ export async function GET(req: NextRequest) {
     }),
     prisma.scenario.findMany({
       where: {
+        deletedAt: null,
         OR: [{ title: contains }, { tags: contains }, { summary: contains }],
       },
       orderBy: { updatedAt: "desc" },

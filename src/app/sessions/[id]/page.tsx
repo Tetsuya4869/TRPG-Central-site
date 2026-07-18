@@ -226,13 +226,23 @@ export default function SessionDetailPage({
               </div>
               <div className="flex gap-2">
                 <dt className="text-zinc-500 w-24">開催日時</dt>
-                <dd>
+                <dd className="flex flex-wrap items-center gap-2">
                   {session.scheduledAt
                     ? new Date(session.scheduledAt).toLocaleString("ja-JP", {
                         dateStyle: "full",
                         timeStyle: "short",
                       })
                     : "未定"}
+                  {session.scheduledAt && (
+                    <a
+                      href={`/api/sessions/${session.id}/ics`}
+                      download
+                      title="カレンダーアプリ (Google/iOS等) に登録できる.icsファイルをダウンロードします"
+                      className="rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-400 hover:border-emerald-500 hover:text-emerald-300"
+                    >
+                      📅 カレンダーに登録
+                    </a>
+                  )}
                 </dd>
               </div>
             </dl>
