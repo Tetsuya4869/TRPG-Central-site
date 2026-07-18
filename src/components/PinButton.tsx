@@ -10,11 +10,14 @@ export function PinButton({
   id,
   pinned: initial,
   className = "",
+  onToggled,
 }: {
   type: "characters" | "scenarios";
   id: string;
   pinned: boolean;
   className?: string;
+  /** クライアント一覧で使う場合の再読込コールバック (省略時は router.refresh) */
+  onToggled?: () => void;
 }) {
   const router = useRouter();
   const [pinned, setPinned] = useState(initial);
@@ -34,7 +37,9 @@ export function PinButton({
       });
       if (res.ok) {
         setPinned(next);
-        router.refresh(); // サーバーコンポーネントの並び順 (ピン優先) を更新
+        // 並び順 (ピン優先) を反映する
+        if (onToggled) onToggled();
+        else router.refresh();
       }
     } finally {
       setBusy(false);

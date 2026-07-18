@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { PinButton } from "@/components/PinButton";
 
 interface ScenarioRecord {
   id: string;
@@ -66,16 +67,6 @@ export default function ScenariosPage() {
       return true;
     });
   }, [scenarios, query, sourceFilter, tagFilter]);
-
-  // ピン留めトグル (並び順はAPI側がピン優先で返すので再読込する)
-  async function togglePin(s: ScenarioRecord) {
-    const res = await fetch(`/api/scenarios/${s.id}/pin`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pinned: !s.pinned }),
-    });
-    if (res.ok) await load();
-  }
 
   async function remove() {
     if (!deleteTarget) return;
@@ -210,17 +201,12 @@ export default function ScenariosPage() {
                 )}
               </Link>
               <div className="ml-4 flex items-center gap-3">
-                <button
-                  onClick={() => togglePin(s)}
-                  aria-label={s.pinned ? "ピン留めを外す" : "ピン留めする"}
-                  aria-pressed={s.pinned}
-                  title={s.pinned ? "ピン留めを外す" : "ピン留めして一覧の先頭に固定"}
-                  className={`text-base leading-none transition-transform hover:scale-125 ${
-                    s.pinned ? "" : "opacity-30 grayscale hover:opacity-70"
-                  }`}
-                >
-                  ⭐
-                </button>
+                <PinButton
+                  type="scenarios"
+                  id={s.id}
+                  pinned={s.pinned}
+                  onToggled={load}
+                />
                 <button
                   onClick={() => setDeleteTarget({ id: s.id, title: s.title })}
                   className="text-xs text-zinc-600 hover:text-red-400"

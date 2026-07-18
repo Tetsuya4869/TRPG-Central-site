@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ScenarioAssetsPanel } from "@/components/scenarios/ScenarioAssetsPanel";
+import { TrashBanner } from "@/components/TrashBanner";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,9 @@ export default async function ScenarioDetailPage({
 
   return (
     <div className="space-y-6">
+      {scenario.deletedAt && (
+        <TrashBanner type="scenario" id={scenario.id} label="このシナリオ" />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">

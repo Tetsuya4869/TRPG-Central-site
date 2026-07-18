@@ -273,6 +273,9 @@ export default async function Home() {
                   >
                     {c.name}
                   </Link>
+                  {c.pinned && (
+                    <span title="ピン留め中" aria-label="ピン留め中">⭐</span>
+                  )}
                   {c.occupation && (
                     <span className="text-xs text-zinc-500 truncate">{c.occupation}</span>
                   )}
@@ -300,6 +303,9 @@ export default async function Home() {
                   >
                     {s.title}
                   </Link>
+                  {s.pinned && (
+                    <span title="ピン留め中" aria-label="ピン留め中">⭐</span>
+                  )}
                   {s.source === "AI_GENERATED" && (
                     <span className="shrink-0 rounded bg-purple-500/20 px-1.5 text-xs text-purple-300">
                       AI

@@ -18,6 +18,7 @@ import { PlayHistory } from "@/components/characters/PlayHistory";
 import { buildCocofoliaCharacter } from "@/lib/cocofolia";
 import { buildCharacterMarkdown } from "@/lib/markdown-export";
 import { MarkdownCopyButton } from "@/components/characters/MarkdownCopyButton";
+import { TrashBanner } from "@/components/TrashBanner";
 import { parseWeaponsJson } from "@/lib/weapons";
 
 export const dynamic = "force-dynamic";
@@ -64,6 +65,9 @@ export default async function CharacterDetailPage({
 
   return (
     <div className="space-y-6">
+      {character.deletedAt && (
+        <TrashBanner type="character" id={character.id} label="この探索者" />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4">
           {character.imageUrl && (

@@ -411,6 +411,7 @@ export default function SessionDetailPage({
       <ConfirmDialog
         open={confirmDeleteSession}
         title={`「${session.title}」を削除しますか?`}
+        message="この操作は取り消せません。ダイス履歴・卓ログなどのプレイ記録も一緒に削除されます (ゴミ箱には入りません)。"
         confirmLabel="削除する"
         danger
         onConfirm={removeSession}

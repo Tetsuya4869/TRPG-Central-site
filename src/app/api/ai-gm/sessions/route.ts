@@ -83,7 +83,23 @@ export async function POST(req: NextRequest) {
     where: { id: { in: parsed.data.characterIds }, deletedAt: null },
   });
   if (characters.length !== parsed.data.characterIds.length) {
-    return NextResponse.json({ error: "探索者が見つかりません" }, { status: 404 });
+    // 続編作成はメンバーIDを前セッションから自動で引き継ぐため、
+    // ゴミ箱行きの探索者が混ざっていても残りのメンバーで続行する
+    if (parsed.data.previousSessionId && characters.length > 0) {
+      // 元の並び順 (前セッションのposition順) を保ったまま欠員だけ除く
+      parsed.data.characterIds = parsed.data.characterIds.filter((id) =>
+        characters.some((c) => c.id === id),
+      );
+    } else {
+      return NextResponse.json(
+        {
+          error: parsed.data.previousSessionId
+            ? "前回のメンバーが全員ゴミ箱にあります。ゴミ箱から復元してから続編を作成してください"
+            : "探索者が見つかりません (ゴミ箱にある探索者は選べません)",
+        },
+        { status: 404 },
+      );
+    }
   }
   // 判定ルールが版で異なるため、パーティは同一版のみ
   const editions = new Set(characters.map((c) => c.edition));

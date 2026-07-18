@@ -20,7 +20,10 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
   const [session, character] = await Promise.all([
     prisma.gameSession.findUnique({ where: { id } }),
-    prisma.character.findUnique({ where: { id: parsed.data.characterId } }),
+    // ゴミ箱にある探索者は新規参加させない (既存の参加リンクは維持される)
+    prisma.character.findFirst({
+      where: { id: parsed.data.characterId, deletedAt: null },
+    }),
   ]);
   if (!session || !character) {
     return NextResponse.json({ error: "卓または探索者が見つかりません" }, { status: 404 });

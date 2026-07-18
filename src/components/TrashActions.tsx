@@ -62,7 +62,11 @@ export function TrashActions({
       <ConfirmDialog
         open={confirming}
         title={`「${name}」を完全に削除しますか?`}
-        message="この操作は取り消せません。プレイ履歴などの関連記録からも失われます。"
+        message={
+          type === "character"
+            ? "この操作は取り消せません。卓への参加記録やプレイ履歴からも失われます。"
+            : "この操作は取り消せません。添付のNPC・ハンドアウト資料も削除されます (卓との紐付けは外れます)。"
+        }
         confirmLabel="完全に削除する"
         danger
         onConfirm={() => {
