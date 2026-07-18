@@ -139,14 +139,26 @@ export function SessionLogPanel({ sessionId }: { sessionId: string }) {
     <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5 space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="font-semibold text-zinc-300">📜 卓ログ</h2>
-        <button
-          onClick={generateSummary}
-          disabled={summarizing || (rolls.length === 0 && logs.length === 0)}
-          title="卓ログからAIで「これまでのあらすじ」を生成します (要APIキー)"
-          className="rounded border border-zinc-700 px-3 py-1 text-xs text-zinc-400 hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-50"
-        >
-          {summarizing ? "生成中…" : "📝 あらすじ生成"}
-        </button>
+        <div className="flex items-center gap-2">
+          {(rolls.length > 0 || logs.length > 0) && (
+            <a
+              href={`/api/sessions/${sessionId}/export`}
+              download
+              title="卓ログとダイス履歴をMarkdownファイルで保存します"
+              className="rounded border border-zinc-700 px-3 py-1 text-xs text-zinc-400 hover:border-emerald-500 hover:text-emerald-300"
+            >
+              ⬇ MD保存
+            </a>
+          )}
+          <button
+            onClick={generateSummary}
+            disabled={summarizing || (rolls.length === 0 && logs.length === 0)}
+            title="卓ログからAIで「これまでのあらすじ」を生成します (要APIキー)"
+            className="rounded border border-zinc-700 px-3 py-1 text-xs text-zinc-400 hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-50"
+          >
+            {summarizing ? "生成中…" : "📝 あらすじ生成"}
+          </button>
+        </div>
       </div>
 
       {/* 出来事メモ入力 */}

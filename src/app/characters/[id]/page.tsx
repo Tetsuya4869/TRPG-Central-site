@@ -16,6 +16,8 @@ import { CocofoliaExportButton } from "@/components/characters/CocofoliaExportBu
 import { WeaponsPanel } from "@/components/characters/WeaponsPanel";
 import { PlayHistory } from "@/components/characters/PlayHistory";
 import { buildCocofoliaCharacter } from "@/lib/cocofolia";
+import { buildCharacterMarkdown } from "@/lib/markdown-export";
+import { MarkdownCopyButton } from "@/components/characters/MarkdownCopyButton";
 import { parseWeaponsJson } from "@/lib/weapons";
 
 export const dynamic = "force-dynamic";
@@ -103,6 +105,7 @@ export default async function CharacterDetailPage({
           <CocofoliaExportButton
             json={JSON.stringify(buildCocofoliaCharacter(character))}
           />
+          <MarkdownCopyButton markdown={buildCharacterMarkdown(character)} />
           <DuplicateCharacterButton id={character.id} />
           <DeleteCharacterButton id={character.id} name={character.name} />
         </div>

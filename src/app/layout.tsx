@@ -3,6 +3,7 @@ import Link from "next/link";
 import "./globals.css";
 import { PwaRegister } from "@/components/PwaRegister";
 import { LogoutButton } from "@/components/LogoutButton";
+import { CommandPalette } from "@/components/CommandPalette";
 
 export const metadata: Metadata = {
   title: "TRPG Central",
@@ -64,11 +65,14 @@ export default function RootLayout({
                 説明書
               </a>
             </nav>
-            {process.env.APP_PASSWORD && (
-              <div className="ml-auto text-sm">
-                <LogoutButton />
-              </div>
-            )}
+            <div className="ml-auto flex items-center gap-3">
+              <CommandPalette />
+              {process.env.APP_PASSWORD && (
+                <div className="text-sm">
+                  <LogoutButton />
+                </div>
+              )}
+            </div>
           </div>
         </header>
         <main className="mx-auto w-full max-w-5xl px-4 py-8 flex-1">
