@@ -46,6 +46,21 @@ interface SessionDetail {
   apiKeyConfigured: boolean;
 }
 
+// Web Speech API の SpeechRecognition (音声入力)。TSのlibに型が無いため最小限を定義
+interface SttRecognition {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult:
+    | ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void)
+    | null;
+  onend: (() => void) | null;
+  onerror: ((e: { error: string }) => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
+
 function ToolCard({ data }: { data: Record<string, unknown> }) {
   const tool = data.tool as string;
   // 対象探索者名 (複数人セッション用。旧データにはフィールドが無いので非表示)
@@ -206,6 +221,50 @@ export default function AiGmPlayPage({
     if (!next && ttsSupported) window.speechSynthesis.cancel();
   }
 
+  // 音声入力 (STT)。Chrome系のみ対応 (Firefox等では sttSupported=false でボタン非表示)
+  const [listening, setListening] = useState(false);
+  const recRef = useRef<SttRecognition | null>(null);
+  const sttBaseRef = useRef(""); // 認識開始時点の入力欄の内容 (末尾に追記する)
+
+  const sttCtor =
+    typeof window !== "undefined"
+      ? ((window as unknown as Record<string, unknown>).SpeechRecognition ??
+        (window as unknown as Record<string, unknown>).webkitSpeechRecognition)
+      : undefined;
+  const sttSupported = typeof sttCtor === "function";
+
+  // マイクで行動宣言を入力欄へ書き取る (自動送信はしない — 確認・編集してから送る)
+  function toggleMic() {
+    if (listening) {
+      recRef.current?.stop();
+      return;
+    }
+    if (!sttSupported) return;
+    // 読み上げ中の音声を拾わないように止める
+    if (ttsSupported) window.speechSynthesis.cancel();
+    const rec = new (sttCtor as new () => SttRecognition)();
+    rec.lang = "ja-JP";
+    rec.interimResults = true;
+    rec.continuous = false;
+    sttBaseRef.current = input;
+    rec.onresult = (e) => {
+      let transcript = "";
+      for (let i = 0; i < e.results.length; i++) transcript += e.results[i][0].transcript;
+      setInput(sttBaseRef.current + transcript);
+    };
+    rec.onend = () => setListening(false);
+    rec.onerror = (e) => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        setError("マイクの使用が許可されていません。ブラウザのマイク権限を確認してください");
+      }
+      // no-speech等は無視 (onendで自然に終了する)
+      setListening(false);
+    };
+    recRef.current = rec;
+    setListening(true);
+    rec.start();
+  }
+
   // キーパーの語りを読み上げる (対応ブラウザのみ)。
   // getVoices()は初回同期呼び出しで空を返すことがあるため、lang指定を主とし
   // 見つかった場合のみvoiceを明示する (voiceschangedはブラウザ差が大きい)。
@@ -241,10 +300,11 @@ export default function AiGmPlayPage({
     load();
   }, [load]);
 
-  // アンマウント時: 進行中ストリームの中断と読み上げの停止
+  // アンマウント時: 進行中ストリームの中断と読み上げ・音声入力の停止
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
+      recRef.current?.abort();
       if ("speechSynthesis" in window) window.speechSynthesis.cancel();
     };
   }, []);
@@ -256,6 +316,7 @@ export default function AiGmPlayPage({
   async function send(text?: string) {
     const message = (text ?? input).trim();
     if (!message || busy || !session) return;
+    recRef.current?.abort(); // 認識途中のまま送信したら書き取りは打ち切る
     setInput("");
     setBusy(true);
     setError("");
@@ -552,6 +613,26 @@ export default function AiGmPlayPage({
             disabled={busy || session.status !== "ONGOING" || !session.apiKeyConfigured}
             className="flex-1 rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none disabled:opacity-50 resize-none"
           />
+          {sttSupported && (
+            <button
+              onClick={toggleMic}
+              disabled={busy || session.status !== "ONGOING"}
+              aria-label={listening ? "音声入力を停止" : "音声入力を開始"}
+              aria-pressed={listening}
+              title={
+                listening
+                  ? "録音中… もう一度押すと停止します"
+                  : "マイクで行動宣言を入力します (書き取り後、内容を確認して送信)"
+              }
+              className={`rounded border px-3 text-lg disabled:opacity-50 ${
+                listening
+                  ? "animate-pulse border-red-500 text-red-300"
+                  : "border-zinc-700 text-zinc-400 hover:border-emerald-500"
+              }`}
+            >
+              🎙️
+            </button>
+          )}
           <button
             onClick={() => send()}
             disabled={busy || !input.trim() || session.status !== "ONGOING" || !session.apiKeyConfigured}

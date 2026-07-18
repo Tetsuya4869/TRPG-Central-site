@@ -2,10 +2,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import {
+  contentTypeForFilename,
+  matchesImageMagic,
+  uploadFilenameFromUrl,
+} from "@/lib/backup-images";
+import { saveUpload } from "@/lib/upload-storage";
 
 export const runtime = "nodejs";
 
-const MAX_SIZE = 50 * 1024 * 1024; // 50MB
+// v3は画像base64を含むため大きめに (raw 100MB上限 → base64で約133MB)
+const MAX_SIZE = 200 * 1024 * 1024; // 200MB
+const MAX_IMAGE_BYTES = 6 * 1024 * 1024; // 1画像あたりのデコード後上限
 
 // 各行はPrismaのcreateManyにそのまま渡す。厳密な列検証はDB制約に任せ、
 // ここでは「バックアップファイルとしての形」だけを検証する。
@@ -13,7 +21,7 @@ const rowsSchema = z.array(z.record(z.string(), z.unknown())).max(100000);
 
 const backupSchema = z.object({
   app: z.literal("trpg-central"),
-  version: z.union([z.literal(1), z.literal(2)]),
+  version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   data: z.object({
     characters: rowsSchema,
     scenarios: rowsSchema,
@@ -21,18 +29,26 @@ const backupSchema = z.object({
     gameSessions: rowsSchema,
     sessionCharacters: rowsSchema,
     sessionChatMessages: rowsSchema.optional(), // v2から
+    sessionLogs: rowsSchema.optional(), // v3から
     aiGmSessions: rowsSchema,
     aiGmSessionMembers: rowsSchema.optional(), // v1でも複数PC化以降は存在
     chatMessages: rowsSchema,
     diceRolls: rowsSchema,
   }),
+  // v3から: imageUrl → base64。旧バックアップには無い
+  images: z
+    .record(
+      z.string().max(500),
+      z.object({ contentType: z.string().max(50), base64: z.string() }),
+    )
+    .optional(),
 });
 
 export async function POST(req: NextRequest) {
   const contentLength = parseInt(req.headers.get("content-length") ?? "0", 10);
   if (contentLength > MAX_SIZE) {
     return NextResponse.json(
-      { error: "バックアップファイルが大きすぎます (50MBまで)" },
+      { error: "バックアップファイルが大きすぎます (200MBまで)" },
       { status: 413 },
     );
   }
@@ -84,6 +100,7 @@ export async function POST(req: NextRequest) {
       // 依存の深い順に全削除
       prisma.chatMessage.deleteMany(),
       prisma.sessionChatMessage.deleteMany(),
+      prisma.sessionLog.deleteMany(),
       prisma.diceRoll.deleteMany(),
       prisma.aiGmSessionMember.deleteMany(),
       prisma.aiGmSession.deleteMany(),
@@ -101,6 +118,7 @@ export async function POST(req: NextRequest) {
       prisma.sessionChatMessage.createMany({
         data: (data.sessionChatMessages ?? []) as any,
       }),
+      prisma.sessionLog.createMany({ data: (data.sessionLogs ?? []) as any }),
       prisma.aiGmSession.createMany({ data: aiGmSessions as any }),
       prisma.aiGmSessionMember.createMany({ data: aiGmSessionMembers as any }),
       prisma.chatMessage.createMany({ data: data.chatMessages as any }),
@@ -120,6 +138,35 @@ export async function POST(req: NextRequest) {
   }
   /* eslint-enable @typescript-eslint/no-explicit-any */
 
+  // 画像の復元 (v3以降・ベストエフォート)。DB復元は上のトランザクションで確定済みなので、
+  // 画像の一部が失敗しても全体は成功扱いにして件数だけ返す。
+  // 同じファイル名で保存するため、同一ストレージ環境なら imageUrl がそのまま有効になる。
+  let imagesRestored = 0;
+  let imagesFailed = 0;
+  for (const [url, entry] of Object.entries(parsed.data.images ?? {})) {
+    try {
+      const filename = uploadFilenameFromUrl(url);
+      const expectedType = filename ? contentTypeForFilename(filename) : null;
+      if (!filename || !expectedType || expectedType !== entry.contentType) {
+        imagesFailed += 1;
+        continue;
+      }
+      const bytes = Buffer.from(entry.base64, "base64");
+      if (
+        bytes.length === 0 ||
+        bytes.length > MAX_IMAGE_BYTES ||
+        !matchesImageMagic(entry.contentType, bytes)
+      ) {
+        imagesFailed += 1;
+        continue;
+      }
+      await saveUpload(filename, bytes, entry.contentType);
+      imagesRestored += 1;
+    } catch {
+      imagesFailed += 1;
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     restored: {
@@ -129,5 +176,7 @@ export async function POST(req: NextRequest) {
       aiGmSessions: data.aiGmSessions.length,
       diceRolls: data.diceRolls.length,
     },
+    imagesRestored,
+    imagesFailed,
   });
 }

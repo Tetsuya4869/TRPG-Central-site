@@ -27,6 +27,7 @@ const navItems = [
   { href: "/scenarios", label: "シナリオ" },
   { href: "/dice", label: "ダイス" },
   { href: "/ai-gm", label: "AI GM" },
+  { href: "/stats", label: "統計" },
   { href: "/reference", label: "早見表" },
 ];
 

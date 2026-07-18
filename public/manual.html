@@ -310,18 +310,18 @@
     <div class="nav-group">
       <div class="gtitle">基本機能</div>
       <a class="nav-item" href="#characters" data-page="characters" data-kw="探索者 キャラクター シート 武器 charaeno インポート 立ち絵"><span class="em">📜</span>探索者管理</a>
-      <a class="nav-item" href="#dice" data-page="dice" data-kw="ダイス 判定 幸運 プッシュ 狂気表 演出"><span class="em">🎲</span>ダイスローラー</a>
-      <a class="nav-item" href="#sessions" data-page="sessions" data-kw="卓 セッション 戦闘 トラッカー タイマー ログ 応急手当 装弾 状態異常"><span class="em">🕯️</span>卓(セッション)管理</a>
+      <a class="nav-item" href="#dice" data-page="dice" data-kw="ダイス 判定 幸運 プッシュ 狂気表 演出 プリセット マイプリセット"><span class="em">🎲</span>ダイスローラー</a>
+      <a class="nav-item" href="#sessions" data-page="sessions" data-kw="卓 セッション 戦闘 トラッカー タイマー ログ 応急手当 装弾 状態異常 テンプレ 敵"><span class="em">🕯️</span>卓(セッション)管理</a>
       <a class="nav-item" href="#scenarios" data-page="scenarios" data-kw="シナリオ NPC ハンドアウト 生成 ジェネレータ"><span class="em">📖</span>シナリオ管理</a>
     </div>
     <div class="nav-group">
       <div class="gtitle">AI機能</div>
-      <a class="nav-item" href="#aigm" data-page="aigm" data-kw="AI GM キーパー クロード claude プレイ 音声 TTS"><span class="em">🐙</span>AI GMプレイ</a>
+      <a class="nav-item" href="#aigm" data-page="aigm" data-kw="AI GM キーパー クロード claude プレイ 音声 TTS マイク 音声入力"><span class="em">🐙</span>AI GMプレイ</a>
       <a class="nav-item" href="#campaign" data-page="campaign" data-kw="キャンペーン 続編 あらすじ 継続 引き継ぎ"><span class="em">🏕️</span>キャンペーン継続</a>
     </div>
     <div class="nav-group">
       <div class="gtitle">その他</div>
-      <a class="nav-item" href="#tools" data-page="tools" data-kw="統計 早見表 バックアップ PWA ココフォリア リプレイ 成長 検索 コマンドパレット markdown 共有 予定 ピン留め お気に入り ゴミ箱 復元 カレンダー ics"><span class="em">🧰</span>便利機能</a>
+      <a class="nav-item" href="#tools" data-page="tools" data-kw="統計 早見表 バックアップ PWA ココフォリア リプレイ 成長 検索 コマンドパレット markdown 共有 予定 ピン留め お気に入り ゴミ箱 復元 カレンダー ics 全体統計 画像"><span class="em">🧰</span>便利機能</a>
       <a class="nav-item" href="#faq" data-page="faq" data-kw="注意 制約 データ 仕組み APIキー 認証 画像"><span class="em">❓</span>注意点とデータの仕組み</a>
     </div>
   </aside>
@@ -462,6 +462,9 @@
         <h2>🌀 狂気表</h2>
         <p>6版は「一時的狂気」、7版は「狂気の発作(リアルタイム)」を1d10で引けます。結果は履歴にも残ります。</p>
 
+        <h2>★ マイプリセット <span class="badge new">NEW</span></h2>
+        <p>よく使うロールや判定を「★保存」しておくと、チップからワンタップで再実行できます (20件まで・同名は上書き)。保存先はブラウザなので、この端末専用のクイックパレットとして使えます。</p>
+
         <h2>ダイス演出 <span class="badge new">NEW</span></h2>
         <p>
           出目は一瞬シャッフルしてから確定します。<strong>クリティカル/イクストリーム成功はリング</strong>が輝き、
@@ -511,6 +514,8 @@
         <p>ワンタップで1d3をロールしてHPを回復します。ロールは卓ログに記録されます。</p>
         <h3>装弾数管理 <span class="badge new">NEW</span></h3>
         <p>射撃武器は攻撃のたびに残弾が減り、弾切れになると「リロード」するまで撃てません。NPC武器の追加時に装弾数を指定できます。</p>
+        <h3>👥 敵テンプレート <span class="badge new">NEW</span></h3>
+        <p>チンピラ・カルト信者・警官・猛犬・異形のもの など8種を<strong>ワンタップで戦闘に追加</strong>できます (武器・装弾数・運用メモ付き)。スタッツは本サイトオリジナルの汎用値で、同じテンプレを複数追加すると「チンピラ 2」のように自動で連番になります。</p>
 
         <h2>📜 卓ログ</h2>
         <p>
@@ -593,6 +598,7 @@
           <tr><th>機能</th><th>説明</th></tr>
           <tr><td>💾 保存・再開</td><td>会話はすべて保存され、いつでも中断・再開できます</td></tr>
           <tr><td>🔊 音声読み上げ</td><td>キーパーの語りをブラウザ音声で読み上げ(ソロプレイの没入感UP)</td></tr>
+          <tr><td>🎙️ 音声入力</td><td>マイクで行動宣言を書き取り (Chrome系のみ)。内容を確認・編集してから送信</td></tr>
           <tr><td>🍀 幸運(7版)</td><td>メンバーごとに幸運バーを表示。幸運消費を宣言するとキーパーが減算して成功化</td></tr>
           <tr><td>🌀 狂気表</td><td>SAN喪失が大きいとキーパーが狂気表を振り、症状を演出に反映</td></tr>
           <tr><td>📊 統計</td><td>SAN推移グラフ・出目分布・技能別成績を表示</td></tr>
@@ -673,6 +679,9 @@
         <h2>📅 次回の卓予定 <span class="badge new">NEW</span></h2>
         <p>卓に開催日時を設定すると、ダッシュボードに「次回の卓予定」として<strong>あと何日か</strong>付きで表示されます。ダッシュボード上部のクイックアクションからは、探索者作成・卓立て・AI GM・ダイスへワンタップで移動できます。</p>
 
+        <h2>📈 全体統計 <span class="badge new">NEW</span></h2>
+        <p>メニュー「統計」。全卓・AI GMセッションを横断した通算成績です。総判定数・成功率・クリファン数、d100出目分布、技能別成績、探索者別ランキング、月別アクティビティを表示します。</p>
+
         <h2>⭐ ピン留め <span class="badge new">NEW</span></h2>
         <p>探索者・シナリオの一覧にある ⭐ を押すと、その項目が<strong>一覧とダッシュボードの先頭に固定</strong>されます。もう一度押すと解除です。</p>
 
@@ -696,7 +705,7 @@
           <li><strong>ダウンロード</strong>: 探索者・シナリオ・プレイログを含む全データをJSONで書き出し</li>
           <li><strong>復元(インポート)</strong>: バックアップJSONから全データを復元(現在のデータは置き換えられます)</li>
         </ul>
-        <div class="warn">立ち絵などの画像ファイルはバックアップJSONに含まれません。別途 <code>public/uploads/</code> を退避してください。</div>
+        <div class="tip">立ち絵・資料画像も<strong>バックアップに同梱</strong>されます (v3形式)。旧形式 (v1/v2) のバックアップも画像なしで復元できます。※ローカル⇔Firebaseなど保存先の環境をまたいだ復元では画像リンクは引き継がれません。</div>
 
         <h2>📱 PWA(ホーム画面に追加)</h2>
         <p>

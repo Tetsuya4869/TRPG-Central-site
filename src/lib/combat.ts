@@ -87,6 +87,14 @@ export function reloadWeapon(weapon: CombatantWeapon): CombatantWeapon {
   return { ...weapon, ammo: weapon.maxAmmo };
 }
 
+// 既存IDと衝突しないNPC ID ("npc-N") を採番する
+// (Date.now()はReact Compilerの純粋性ルールに抵触するため連番方式)
+export function nextNpcId(combatants: Combatant[]): string {
+  let n = 1;
+  while (combatants.some((c) => c.id === `npc-${n}`)) n += 1;
+  return `npc-${n}`;
+}
+
 // 命中判定でヒット扱いになる成功度 (attack APIと同一定義)
 const HIT_OUTCOMES = new Set(["CRITICAL", "EXTREME", "HARD", "SUCCESS"]);
 

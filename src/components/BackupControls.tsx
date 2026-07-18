@@ -29,7 +29,9 @@ export function BackupControls() {
         return;
       }
       setMessage(
-        `✓ 復元しました (探索者${data.restored.characters} / シナリオ${data.restored.scenarios} / 卓${data.restored.gameSessions} / AI GM${data.restored.aiGmSessions})`,
+        `✓ 復元しました (探索者${data.restored.characters} / シナリオ${data.restored.scenarios} / 卓${data.restored.gameSessions} / AI GM${data.restored.aiGmSessions}${
+          data.imagesRestored > 0 ? ` / 画像${data.imagesRestored}` : ""
+        }${data.imagesFailed > 0 ? ` / 画像スキップ${data.imagesFailed}` : ""})`,
       );
       router.refresh();
     } catch {
@@ -66,7 +68,7 @@ export function BackupControls() {
         open={pendingFile !== null}
         title="バックアップから復元しますか?"
         message={
-          "⚠️ 現在の全データ(探索者・シナリオ・卓・プレイログ)がバックアップの内容に置き換えられます。この操作は取り消せません。\n⚠️ 立ち絵などの画像ファイル(public/uploads)はバックアップに含まれません。"
+          "⚠️ 現在の全データ(探索者・シナリオ・卓・プレイログ)がバックアップの内容に置き換えられます。この操作は取り消せません。\n📷 立ち絵・資料画像も一緒に復元されます (旧形式のバックアップは画像なしで復元)。"
         }
         confirmLabel="復元する"
         danger

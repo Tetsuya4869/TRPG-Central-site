@@ -18,7 +18,7 @@ export interface StatsMemberInput {
   name: string;
 }
 
-const SUCCESS_OUTCOMES = new Set(["SUCCESS", "HARD", "EXTREME", "CRITICAL"]);
+export const SUCCESS_OUTCOMES = new Set(["SUCCESS", "HARD", "EXTREME", "CRITICAL"]);
 
 export interface SanPoint {
   index: number; // 何回目のSANチェックか (時系列)

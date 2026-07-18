@@ -13,10 +13,17 @@ import {
   canFire,
   consumeAmmo,
   reloadWeapon,
+  nextNpcId,
   type CombatState,
   type Combatant,
   type CombatantWeapon,
 } from "@/lib/combat";
+import {
+  NPC_TEMPLATES,
+  npcFromTemplate,
+  uniqueNpcName,
+  type NpcTemplate,
+} from "@/lib/npc-templates";
 import { deriveStatsFor, effectiveSkillsFor, type Edition } from "@/lib/coc";
 import type { StatBlock } from "@/lib/coc6/types";
 import { parseWeaponsJson } from "@/lib/weapons";
@@ -308,11 +315,8 @@ export function CombatTracker({
     if (!combat || !npcName.trim()) return;
     const dex = parseInt(npcDex, 10) || 10;
     const hp = parseInt(npcHp, 10) || 10;
-    // 保存済みIDと衝突しない連番を採る (Date.now()はReact Compilerの純粋性ルールに抵触)
-    let n = 1;
-    while (combat.combatants.some((c) => c.id === `npc-${n}`)) n += 1;
     const combatant: Combatant = {
-      id: `npc-${n}`,
+      id: nextNpcId(combat.combatants),
       name: npcName.trim(),
       kind: "NPC",
       characterId: null,
@@ -327,6 +331,17 @@ export function CombatTracker({
     setNpcName("");
     setNpcDex("");
     setNpcHp("");
+    persist({ ...combat, combatants: [...combat.combatants, combatant] });
+  }
+
+  // テンプレートから敵をワンタップ追加 (名前は「チンピラ 2」のように自動連番)
+  function addNpcFromTemplate(template: NpcTemplate) {
+    if (!combat || combat.combatants.length >= 30) return;
+    const combatant = npcFromTemplate(
+      template,
+      nextNpcId(combat.combatants),
+      uniqueNpcName(template.name, combat.combatants.map((c) => c.name)),
+    );
     persist({ ...combat, combatants: [...combat.combatants, combatant] });
   }
 
@@ -897,6 +912,27 @@ export function CombatTracker({
             追加
           </button>
         </div>
+      </div>
+
+      {/* 敵テンプレート (ワンタップ追加) */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-xs text-zinc-600">テンプレ:</span>
+        {NPC_TEMPLATES.map((t) => (
+          <button
+            key={t.name}
+            onClick={() => addNpcFromTemplate(t)}
+            disabled={saving || combat.combatants.length >= 30}
+            title={`DEX${t.dex} / HP${t.hp} / DB${t.damageBonus} / ${t.weapons
+              .map((w) => `${w.name}${w.skillValue}%`)
+              .join("・")} — ${t.memo}`}
+            className="rounded border border-zinc-800 bg-zinc-950/60 px-2 py-1 text-xs text-zinc-400 hover:border-red-500 hover:text-red-200 disabled:opacity-50"
+          >
+            {t.icon} {t.name}
+          </button>
+        ))}
+        <span className="w-full text-[11px] text-zinc-600">
+          ※テンプレは本サイトオリジナルの汎用値 (6版基準)。7版卓ではDEXを5倍で読み替えてください
+        </span>
       </div>
     </section>
   );

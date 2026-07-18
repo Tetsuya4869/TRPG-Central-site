@@ -2,8 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { OutcomeBadge } from "@/components/dice/OutcomeBadge";
+import { RollPresets } from "@/components/dice/RollPresets";
 import { deriveStatsFor, effectiveSkillsFor, type Edition } from "@/lib/coc";
 import type { StatBlock } from "@/lib/coc6/types";
+import { parseExpression } from "@/lib/dice";
+import {
+  DICE_PRESETS_KEY,
+  MAX_PRESETS,
+  parsePresets,
+  upsertPreset,
+  removePreset,
+  presetToRollBody,
+  type DicePreset,
+} from "@/lib/dice-presets";
 
 interface CharacterRecord {
   id: string;
@@ -67,6 +78,61 @@ export default function DicePage() {
   } | null>(null);
   // シャッフル演出: null=確定表示、数値=SHUFFLE_SEQのインデックス
   const [shuffleIdx, setShuffleIdx] = useState<number | null>(null);
+  // カスタムロールプリセット (localStorage、hydration後にロード)
+  const [myPresets, setMyPresets] = useState<DicePreset[]>([]);
+
+  useEffect(() => {
+    try {
+      setMyPresets(parsePresets(localStorage.getItem(DICE_PRESETS_KEY)));
+    } catch {
+      // localStorage不可でも機能自体は使える (保存されないだけ)
+    }
+  }, []);
+
+  function savePresets(next: DicePreset[]) {
+    setMyPresets(next);
+    try {
+      localStorage.setItem(DICE_PRESETS_KEY, JSON.stringify(next));
+    } catch {
+      // プライベートモード等では黙って諦める
+    }
+  }
+
+  // 汎用ロールの式をプリセット保存 (不正な式は拒否)
+  function saveExpressionPreset() {
+    const expr = expression.trim();
+    if (!expr) return;
+    try {
+      parseExpression(expr);
+    } catch {
+      setError(`「${expr}」はダイス式として解釈できないため保存できません`);
+      return;
+    }
+    savePresets(
+      upsertPreset(myPresets, {
+        id: crypto.randomUUID(),
+        name: expr,
+        expression: expr,
+      }),
+    );
+  }
+
+  // 技能判定をプリセット保存 (名前は技能名、なければ「判定N」)
+  function saveCheckPreset() {
+    const t = parseInt(target, 10);
+    if (isNaN(t) || t < 1 || t > 100) {
+      setError("目標値は1〜100で入力してください");
+      return;
+    }
+    savePresets(
+      upsertPreset(myPresets, {
+        id: crypto.randomUUID(),
+        name: (skillName.trim() || `判定${t}`).slice(0, 30),
+        target: t,
+        edition: checkEdition,
+      }),
+    );
+  }
 
   // 新しいロール結果が来たら数字シャッフル→確定表示 (reduced-motion時はスキップ)
   const latestId = latest?.id ?? null;
@@ -294,7 +360,25 @@ export default function DicePage() {
               >
                 ロール
               </button>
+              <button
+                onClick={saveExpressionPreset}
+                disabled={!expression.trim() || myPresets.length >= MAX_PRESETS}
+                title={
+                  myPresets.length >= MAX_PRESETS
+                    ? `プリセットは${MAX_PRESETS}件までです`
+                    : "この式をマイプリセットに保存 (同名は上書き)"
+                }
+                className="rounded border border-amber-800 px-3 py-2 text-sm text-amber-300 hover:bg-amber-950/40 disabled:opacity-40"
+              >
+                ★保存
+              </button>
             </div>
+            <RollPresets
+              presets={myPresets}
+              busy={busy}
+              onRun={(p) => roll(presetToRollBody(p))}
+              onRemove={(id) => savePresets(removePreset(myPresets, id))}
+            />
           </section>
 
           {/* 技能判定 */}
@@ -356,6 +440,18 @@ export default function DicePage() {
                 className="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold hover:bg-emerald-500 disabled:opacity-50"
               >
                 判定
+              </button>
+              <button
+                onClick={saveCheckPreset}
+                disabled={!target.trim() || myPresets.length >= MAX_PRESETS}
+                title={
+                  myPresets.length >= MAX_PRESETS
+                    ? `プリセットは${MAX_PRESETS}件までです`
+                    : "この判定をマイプリセットに保存 (同名は上書き。ボーナスダイスは保存されません)"
+                }
+                className="rounded border border-amber-800 px-3 py-2 text-sm text-amber-300 hover:bg-amber-950/40 disabled:opacity-40"
+              >
+                ★保存
               </button>
             </div>
             <p className="text-xs text-zinc-500">
