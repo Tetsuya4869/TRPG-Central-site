@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
 
+// 全ページをリクエスト時レンダリングにする。
+// D1のデータを常に最新で表示し、ビルド時のDBアクセス(getCloudflareContext不可)も防ぐ。
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "TRPG Central",
   description: "クトゥルフ神話TRPGをはじめとするTRPGの管理サイト",

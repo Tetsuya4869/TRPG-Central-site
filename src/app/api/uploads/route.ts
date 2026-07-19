@@ -1,9 +1,8 @@
 // キャラ立ち絵のアップロード。ファイル名は完全サーバー生成でパストラバーサルを根絶し、
-// MIMEはヘッダ申告+マジックバイトの二重チェックを行う。
+// MIMEはヘッダ申告+マジックバイトの二重チェックを行う。保存先はCloudflare R2。
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
 import crypto from "crypto";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 export const runtime = "nodejs";
 
@@ -82,9 +81,10 @@ export async function POST(req: NextRequest) {
   }
 
   const filename = `${crypto.randomUUID()}.${ext}`;
-  const dir = path.join(process.cwd(), "public", "uploads");
-  await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, filename), bytes);
+  const { env } = getCloudflareContext();
+  await env.UPLOADS.put(filename, bytes, {
+    httpMetadata: { contentType: file.type },
+  });
 
   return NextResponse.json({ url: `/uploads/${filename}` }, { status: 201 });
 }
