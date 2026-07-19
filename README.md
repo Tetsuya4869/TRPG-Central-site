@@ -21,8 +21,10 @@
 ## 技術スタック
 
 - [Next.js](https://nextjs.org/) (App Router) + TypeScript + Tailwind CSS
-- [Prisma](https://www.prisma.io/) + SQLite (PostgreSQLへ移行可能な設計)
+- [Prisma](https://www.prisma.io/) + SQLite互換の [Cloudflare D1](https://developers.cloudflare.com/d1/) (driver adapter構成、ローカル開発はminiflareのローカルD1)
+- 立ち絵画像は [Cloudflare R2](https://developers.cloudflare.com/r2/) に保存
 - [Anthropic TypeScript SDK](https://github.com/anthropics/anthropic-sdk-typescript) — モデル `claude-sonnet-5`、SSEストリーミング + tool use、prompt caching
+- [@opennextjs/cloudflare](https://opennext.js.org/cloudflare) で Cloudflare Workers にデプロイ
 
 ## セットアップ
 
@@ -35,8 +37,8 @@ cp .env.example .env
 #   AI GM機能を使う場合は .env の ANTHROPIC_API_KEY を設定してください
 #   (https://console.anthropic.com/ で取得。未設定でもAI GM以外は全機能動作します)
 
-# 3. データベースの初期化
-npx prisma migrate dev
+# 3. データベースの初期化 (ローカルD1にスキーマ適用)
+npx wrangler d1 migrations apply DB --local
 
 # 4. 開発サーバー起動
 npm run dev
@@ -44,7 +46,31 @@ npm run dev
 
 http://localhost:3000 を開いてください。
 
-> **Note**: AI GMの応答はロングランニングなSSEストリーミングです。実行時間制限のあるサーバーレス環境ではなく、ローカルまたはセルフホスト環境での利用を想定しています。立ち絵画像も `public/uploads/` に保存されるため、エフェメラルなファイルシステムの環境では永続しません(SQLiteと同じ制約です)。
+> **Note**: AI GMの応答はロングランニングなSSEストリーミングです。データはD1、立ち絵画像はR2に保存されるため、Cloudflare Workers上でそのまま永続します。ローカル開発時は `.wrangler/state/` 配下のローカルD1/R2に保存されます。
+
+## Cloudflareへのデプロイ (無償枠)
+
+[@opennextjs/cloudflare](https://opennext.js.org/cloudflare) により Cloudflare Workers 上で動作します。データベースは D1、立ち絵画像は R2 を使います。いずれも無償枠の範囲で運用できます。
+
+### 初回セットアップ
+
+1. [Cloudflareダッシュボード](https://dash.cloudflare.com/) で以下を作成する
+   - D1データベース `trpg-central-db` — 発行された Database ID を `wrangler.jsonc` の `database_id` に設定
+   - R2バケット `trpg-central-uploads`
+2. D1コンソールで `migrations/0001_init.sql` の内容を実行する (ローカルからなら `npx wrangler d1 migrations apply DB --remote`)
+3. Workers & Pages → 作成 → **Gitに接続** でこのリポジトリを選び、ビルド設定を入れる
+   - ビルドコマンド: `npx opennextjs-cloudflare build`
+   - デプロイコマンド: `npx opennextjs-cloudflare deploy`
+4. (任意) AI GM機能を使う場合は Workerの「設定 → 変数とシークレット」に `ANTHROPIC_API_KEY` を追加する
+
+以後は対象ブランチへの push だけで自動デプロイされます。ローカルで本番同等の動作確認をするには `npm run preview` を使います。
+
+### 無償枠の注意点
+
+- Workersの無償枠は[1リクエストあたりCPU時間10ms](https://developers.cloudflare.com/workers/platform/limits/)。通常の操作(キャラ管理・ダイス・卓管理)はI/O待ちが大半のため収まる想定ですが、履歴が肥大したAI GMセッションでは超える可能性があります(Workers Paid $5/月でCPU 30秒に拡大)
+- [D1の無償枠](https://developers.cloudflare.com/d1/platform/pricing/): 5GB / 読み取り500万行/日 / 書き込み10万行/日
+- [R2の無償枠](https://developers.cloudflare.com/r2/pricing/): 保存10GB、下り転送は無料
+- 公開URLになるため、自分専用にしたい場合は [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/policies/access/)(50ユーザーまで無料)でメール認証を掛けることを推奨します
 
 ## テスト
 

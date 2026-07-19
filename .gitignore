@@ -46,3 +46,8 @@ prisma/dev.db-journal
 
 # アップロード画像 (立ち絵)
 /public/uploads
+
+# cloudflare
+.open-next/
+.wrangler/
+.dev.vars*
